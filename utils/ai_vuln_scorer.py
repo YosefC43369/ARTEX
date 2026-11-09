@@ -374,7 +374,7 @@ CHAINING_PAIRS: dict[tuple[VulnClass, VulnClass], tuple[float, str]] = {
     (VulnClass.SSRF,                  VulnClass.INTERNAL_SERVICE):     (0.90, "SSRF reaches internal service (Redis/Elasticsearch/K8s API) — lateral movement within private network"),
     (VulnClass.CLOUD_METADATA,        VulnClass.CREDENTIAL_EXPOSURE):  (0.99, "Cloud metadata SSRF yields IAM role credentials — AWS/GCP account takeover path confirmed"),
     (VulnClass.AUTH_BYPASS,           VulnClass.SSRF):                 (0.95, "Post-auth SSRF with valid session bypasses IP-based access controls on internal endpoints"),
-    (VulnClass.AUTH_BYPASS,           VulnClass.EXFILTRATION := VulnClass.JS_SECRET_EXPOSURE): (0.88, "Authenticated session enables access to admin API returning sensitive configuration"),
+    (VulnClass.AUTH_BYPASS,           VulnClass.JS_SECRET_EXPOSURE): (0.88, "Authenticated session enables access to admin API returning sensitive configuration"),
     (VulnClass.CREDENTIAL_EXPOSURE,   VulnClass.AUTH_BYPASS):          (0.97, "Valid credentials found — direct authentication bypass without exploit needed"),
     (VulnClass.WAF_BYPASS,            VulnClass.SQLI_ERROR):           (0.90, "WAF bypass unlocks SQLi vector — database error disclosure confirms injectable parameter"),
     (VulnClass.WAF_BYPASS,            VulnClass.SSTI):                 (0.88, "WAF bypass allows SSTI payload delivery — template engine RCE path confirmed"),

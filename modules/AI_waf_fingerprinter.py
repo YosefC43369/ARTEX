@@ -442,7 +442,7 @@ BYPASS_TECHNIQUES: Dict[str, List[Dict]] = {
             "description":    "Wrapping SQL or XSS payloads inside a JSON body can evade CF WAF rules tuned for form-urlencoded.",
             "applies_to":     ["sqli", "xss", "nosql"],
             "payloads":       [
-                '{"id": "1\\' OR \\'1\\'=\\'1"}',
+                '{"id": "1\' OR \'1\'=\'1"}',
                 '{"q": "<script>alert(1)</script>"}',
             ],
             "limitations":    "Only works if origin accepts JSON for the endpoint.",

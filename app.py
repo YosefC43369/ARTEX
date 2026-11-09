@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify, session, abort
 import uuid
 import threading
 import time
@@ -19,7 +19,7 @@ from modules.shodan_probe import ShodanProbe
 from modules.reverse_whois import ReverseWhois
 from modules.cache_poisoning_probe import CachePoisoningProbe
 from modules.websocket_scanner import WebSocketScanner
-from modules.ai_db_exfil_agent import AIDNExfilAgent
+from modules.ai_db_exfil_agent import AIDBExfilAgent
 from modules.http_smuggling_probe import HTTPSmugglingProbe
 from modules.ssti_scanner import SSTIScanner
 from modules.network_range_mapper import NetworkRangeMapper
@@ -645,7 +645,7 @@ def run_scan(scan_id, domain, options):
                 except Exception as e:
                     scan_results[scan_id]['waf_fingerprint'] = {'error': str(e)}
                     
-            if opions.get('header_injection'):
+            if options.get('header_injection'):
                 scan_status[scan_id]['current_task'] = 'Header Injection Probing...'
                 try:
                     scan_results[scan_id]['header_injection'] = run_header_injection(target_base_url)
@@ -1101,10 +1101,10 @@ def batch_upload():
         return jsonify({'error': 'No file uploaded'}), 400
         
     f = request.files['file']
-    if not f.filename.endwith('.txt'):
+    if not f.filename.endswith('.txt'):
         return jsonify({'error': 'Only .txt files accepted'}), 400
-        
-    context = f.read().decode('utf-8', errors='replace')
+
+    content = f.read().decode('utf-8', errors='replace')
     report  = batch_manager.parse_txt_file(content)
     
     # Store raw content in session for /batch/start
@@ -1228,6 +1228,7 @@ def batch_export(batch_id):
     fmt = request.args.get('format', 'json')
 
     if fmt == 'json':
+        import json
         payload = json.dumps(batch.to_dict(), indent=2, default=str)
         return payload, 200, {
             'Content-Type': 'application/json',

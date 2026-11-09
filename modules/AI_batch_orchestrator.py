@@ -60,11 +60,11 @@ def _log_exec(batch: BatchOperation, target: TargetContext, tool: str,
         batch_id    = batch.batch_id,
         target_id   = target.target_id,
         agent       = "recon_agent",
-        tool        = "SubdomainEnumerator",
-        operation   = "enumerate",
-        arguments   = {"domain": domain},
-        stdout      = f"Found {len(subdomains)} subdomains",
-        duration_s  = time.time() - t0,
+        tool        = tool,
+        operation   = operation,
+        arguments   = args,
+        stdout      = stdout,
+        duration_s  = duration,
     )
     target.evidence_ids.append(evidence_id)
     return evidence_id
