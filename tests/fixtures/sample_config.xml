@@ -10,9 +10,10 @@
   </engagement>
   <targets>
     <target id="fixture-target">
-      <domain>example.com</domain>
-      <url>https://example.com</url>
-      <allowed_domains>example.com</allowed_domains>
+      <urls>
+        <url>https://example.com</url>
+        <url>https://www.example.com</url>
+      </urls>
       <allow_wildcard_subdomains>true</allow_wildcard_subdomains>
       <allowed_protocols>https</allowed_protocols>
       <allowed_ports>443</allowed_ports>

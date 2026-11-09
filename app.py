@@ -1489,6 +1489,11 @@ def _pentest_guard():
     return None
 
 
+@app.route('/pentest')
+def pentest_dashboard():
+    return render_template('pentest.html')
+
+
 @app.route('/pentest/health')
 def pentest_health():
     if pentest_agent is None:

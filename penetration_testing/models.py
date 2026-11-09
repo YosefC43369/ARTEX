@@ -53,8 +53,9 @@ class Target:
     """
 
     identifier: str
-    url: str
-    domain: str
+    url: str                                    # primary URL (first in `urls`)
+    domain: str                                 # derived from the primary URL
+    urls: List[str] = field(default_factory=list)   # all authorized URLs
     allowed_domains: List[str] = field(default_factory=list)
     allow_wildcard_subdomains: bool = False
     allowed_protocols: List[str] = field(default_factory=lambda: ["https"])

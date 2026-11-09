@@ -35,8 +35,9 @@ def _config_xml(perms: str = "", extra_target_body: str = "") -> str:
           </engagement>
           <targets>
             <target id="t1">
-              <domain>example.com</domain>
-              <url>https://example.com</url>
+              <urls>
+                <url>https://example.com</url>
+              </urls>
               <allowed_domains>example.com</allowed_domains>
               <allow_wildcard_subdomains>true</allow_wildcard_subdomains>
               <allowed_protocols>https</allowed_protocols>

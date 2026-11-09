@@ -25,6 +25,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 # Prefer defusedxml (hardened against XXE / billion-laughs) when it is
 # installed; otherwise fall back to the stdlib parser, which does not resolve
@@ -79,6 +80,12 @@ def _split_csv(text: Optional[str]) -> List[str]:
     if not text:
         return []
     return [p.strip() for p in text.split(",") if p.strip()]
+
+
+def _normalize_url(value: str) -> str:
+    """Ensure a URL carries a scheme (default https)."""
+    value = value.strip()
+    return value if "://" in value else f"https://{value}"
 
 
 @dataclass
@@ -218,18 +225,49 @@ class ConfigLoader:
             seen.add(target.identifier)
             settings.targets[target.identifier] = target
 
+    @staticmethod
+    def _collect_urls(node: ET.Element) -> List[str]:
+        """Gather target URLs (url-only schema), preserving order, de-duped.
+
+        Supports the current ``<urls><url>...</url></urls>`` multi-URL form and,
+        for backward compatibility, a single top-level ``<url>`` and a legacy
+        ``<domain>`` (promoted to an https URL).
+        """
+        urls: List[str] = []
+        container = node.find("urls")
+        if container is not None:
+            for u in container.findall("url"):
+                if u.text and u.text.strip():
+                    urls.append(_normalize_url(u.text))
+        single = node.findtext("url")          # direct child only (not inside <urls>)
+        if single and single.strip():
+            urls.append(_normalize_url(single))
+        legacy_domain = node.findtext("domain")   # backward compat
+        if legacy_domain and legacy_domain.strip():
+            urls.append(_normalize_url(legacy_domain))
+
+        seen, out = set(), []
+        for u in urls:
+            if u not in seen:
+                seen.add(u)
+                out.append(u)
+        return out
+
     def _parse_target(self, node: ET.Element) -> Target:
         identifier = (node.get("id") or node.findtext("id") or "").strip()
-        url = (node.findtext("url") or "").strip()
-        domain = (node.findtext("domain") or "").strip()
-
         if not identifier:
             raise ConfigurationError("A <target> is missing its id (fail-closed).")
+
+        urls = self._collect_urls(node)
+        if not urls:
+            raise ConfigurationError(
+                "Target has no <url> (fail-closed).", detail=identifier)
+        url = urls[0]
+        domain = urlparse(url).hostname or ""
         if not domain:
             raise ConfigurationError(
-                "Target is missing <domain> (fail-closed).", detail=identifier)
-        if not url:
-            url = f"https://{domain}"
+                "Target primary <url> has no host (fail-closed).",
+                detail=f"{identifier}: {url}")
 
         protocols = _split_csv(node.findtext("allowed_protocols")) or ["https"]
         ports_raw = _split_csv(node.findtext("allowed_ports")) or ["443"]
@@ -253,13 +291,16 @@ class ConfigLoader:
                 permissions[child.tag] = _as_bool(child.text, False)
 
         allowed_domains = _split_csv(node.findtext("allowed_domains"))
-        if domain not in allowed_domains:
-            allowed_domains.append(domain)
+        for u in urls:
+            host = urlparse(u).hostname
+            if host and host not in allowed_domains:
+                allowed_domains.append(host)
 
         return Target(
             identifier=identifier,
             url=url,
             domain=domain,
+            urls=urls,
             allowed_domains=allowed_domains,
             allow_wildcard_subdomains=_as_bool(node.findtext("allow_wildcard_subdomains"), False),
             allowed_protocols=[p.lower() for p in protocols],

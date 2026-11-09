@@ -8,8 +8,12 @@
     * A target that is not listed here can never be assessed.
     * Capabilities default to FALSE. A target may only use a capability that is
       explicitly set to true below.
-    * Runtime limits are clamped to hard safety ceilings in code; you can make
-      an engagement safer here, never more permissive than the ceiling.
+    * Runtime limits are clamped to hard safety ceilings in code.
+
+  URL-ONLY SCHEMA
+    Each target is defined by one or more <url> entries inside <urls>. The host
+    of every URL is placed in scope automatically; there is no separate <domain>
+    field. Add as many <url> entries as you need.
 
   Edit this file to define YOUR OWN authorized targets. Only assess systems you
   own or have explicit written permission to test.
@@ -17,7 +21,6 @@
 <artex_pentest>
 
   <engagement>
-    <!-- Autonomous loop is OFF by default; turn on only for authorized runs. -->
     <autonomous_enabled>false</autonomous_enabled>
 
     <!-- Bounds (clamped to code ceilings: iters<=100, runtime<=3600s, conc<=16,
@@ -29,7 +32,6 @@
     <max_tasks>200</max_tasks>
 
     <evidence_enabled>true</evidence_enabled>
-    <!-- Optional: directory for persisted evidence JSON. Empty = memory only. -->
     <evidence_dir></evidence_dir>
 
     <report_formats>json,markdown,html</report_formats>
@@ -41,15 +43,17 @@
   </engagement>
 
   <targets>
-    <!-- Sample target. Replace with your own authorized scope. -->
+
+    <!-- Sample target. Replace with your own authorized scope.
+         Add one or more <url> lines; every URL's host becomes in-scope. -->
     <target id="example-target">
-      <domain>example.com</domain>
-      <url>https://example.com</url>
+      <urls>
+        <url>https://example.com</url>
+        <url>https://www.example.com</url>
+        <!-- <url>https://api.example.com</url> -->
+      </urls>
 
-      <!-- Hosts considered in-scope. The target domain is always included. -->
-      <allowed_domains>example.com</allowed_domains>
       <allow_wildcard_subdomains>true</allow_wildcard_subdomains>
-
       <allowed_protocols>https</allowed_protocols>
       <allowed_ports>443</allowed_ports>
 
@@ -75,6 +79,16 @@
         <api_testing>false</api_testing>
       </permissions>
     </target>
+
+    <!-- Add more targets by copying the block above with a new id and urls.
+    <target id="second-target">
+      <urls>
+        <url>https://staging.yoursite.com</url>
+      </urls>
+      <permissions><recon>true</recon></permissions>
+    </target>
+    -->
+
   </targets>
 
 </artex_pentest>
