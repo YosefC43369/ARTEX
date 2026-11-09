@@ -1,6 +1,24 @@
 {% macro port_panel(port_scan, scan_id='') %}
 {% if port_scan %}
 
+{# service icon helper — defined before use #}
+{%- macro pp_svc_icon(svc) -%}
+{%- set s = svc|lower -%}
+{%- if 'http' in s or 'web' in s -%}<i class="bi bi-globe pp-svc-icon"></i>
+{%- elif 'ssh' in s or 'sftp' in s -%}<i class="bi bi-terminal pp-svc-icon"></i>
+{%- elif 'ftp' in s -%}<i class="bi bi-folder-symlink pp-svc-icon"></i>
+{%- elif 'smtp' in s or 'mail' in s or 'imap' in s or 'pop' in s -%}<i class="bi bi-envelope pp-svc-icon"></i>
+{%- elif 'dns' in s -%}<i class="bi bi-hdd-network pp-svc-icon"></i>
+{%- elif 'rdp' in s or 'vnc' in s or 'remote' in s -%}<i class="bi bi-display pp-svc-icon"></i>
+{%- elif 'mysql' in s or 'postgres' in s or 'mssql' in s or 'oracle' in s or 'mongo' in s or 'redis' in s -%}<i class="bi bi-database pp-svc-icon"></i>
+{%- elif 'smb' in s or 'netbios' in s -%}<i class="bi bi-share pp-svc-icon"></i>
+{%- elif 'telnet' in s -%}<i class="bi bi-terminal-dash pp-svc-icon"></i>
+{%- elif 'ldap' in s -%}<i class="bi bi-diagram-3 pp-svc-icon"></i>
+{%- elif 'snmp' in s -%}<i class="bi bi-router pp-svc-icon"></i>
+{%- else -%}<i class="bi bi-plug pp-svc-icon"></i>
+{%- endif -%}
+{%- endmacro -%}
+
 <style>
     /* ── toolbar ── */
     .pp-toolbar {
@@ -382,24 +400,6 @@
 <div class="pp-empty" id="ppEmpty" style="display:none;">
     <i class="bi bi-funnel"></i>No hosts match the current filter.
 </div>
-
-{# service icon helper — called inline in Jinja #}
-{%- macro pp_svc_icon(svc) -%}
-{%- set s = svc|lower -%}
-{%- if 'http' in s or 'web' in s -%}<i class="bi bi-globe pp-svc-icon"></i>
-{%- elif 'ssh' in s or 'sftp' in s -%}<i class="bi bi-terminal pp-svc-icon"></i>
-{%- elif 'ftp' in s -%}<i class="bi bi-folder-symlink pp-svc-icon"></i>
-{%- elif 'smtp' in s or 'mail' in s or 'imap' in s or 'pop' in s -%}<i class="bi bi-envelope pp-svc-icon"></i>
-{%- elif 'dns' in s -%}<i class="bi bi-hdd-network pp-svc-icon"></i>
-{%- elif 'rdp' in s or 'vnc' in s or 'remote' in s -%}<i class="bi bi-display pp-svc-icon"></i>
-{%- elif 'mysql' in s or 'postgres' in s or 'mssql' in s or 'oracle' in s or 'mongo' in s or 'redis' in s -%}<i class="bi bi-database pp-svc-icon"></i>
-{%- elif 'smb' in s or 'netbios' in s -%}<i class="bi bi-share pp-svc-icon"></i>
-{%- elif 'telnet' in s -%}<i class="bi bi-terminal-dash pp-svc-icon"></i>
-{%- elif 'ldap' in s -%}<i class="bi bi-diagram-3 pp-svc-icon"></i>
-{%- elif 'snmp' in s -%}<i class="bi bi-router pp-svc-icon"></i>
-{%- else -%}<i class="bi bi-plug pp-svc-icon"></i>
-{%- endif -%}
-{%- endmacro -%}
 
 <script>
 (function () {

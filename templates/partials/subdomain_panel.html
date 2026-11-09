@@ -1,0 +1,124 @@
+{% macro subdomain_panel(subdomains, takeover_analysis) %}
+{#
+   Summary panel rendered above the detailed subdomain table in results.html.
+   Defensive against missing/partial data:
+     - subdomains: list of dicts with keys subdomain / ip / http_status / https_status / title
+     - takeover_analysis: dict with keys vulnerable / dangling_dns / safe / summary{...}
+#}
+<style>
+    .sdp-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .6rem;
+        margin-bottom: 1.25rem;
+    }
+    .sdp-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: .25rem .75rem;
+        border-radius: 20px;
+        font-size: .76rem;
+        font-weight: 700;
+        background: white;
+        box-shadow: var(--box-shadow);
+    }
+    .sdp-chip i { font-size: .8rem; }
+    .sdp-alert {
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1.25rem;
+        box-shadow: var(--box-shadow);
+        background: white;
+        border-left: 4px solid #ef4444;
+    }
+    .sdp-alert.sdp-warn { border-left-color: #f59e0b; }
+    .sdp-alert-title {
+        font-weight: 700;
+        font-size: .88rem;
+        color: var(--dark-color);
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        margin-bottom: .6rem;
+    }
+    .sdp-item {
+        font-family: 'Courier New', monospace;
+        font-size: .8rem;
+        color: #475569;
+        padding: .2rem 0;
+        word-break: break-all;
+    }
+    .sdp-item .sdp-tag {
+        font-family: inherit;
+        font-weight: 700;
+        font-size: .7rem;
+        padding: .1rem .5rem;
+        border-radius: 12px;
+        margin-left: .4rem;
+    }
+    .sdp-tag-danger  { background: rgba(239,68,68,.1);  color: #ef4444; }
+    .sdp-tag-warning { background: rgba(245,158,11,.1); color: #f59e0b; }
+</style>
+
+{% set sd = subdomains or [] %}
+{% set active = sd | selectattr('http_status') | list | length
+              + sd | rejectattr('http_status') | selectattr('https_status') | list | length %}
+{% set summary = (takeover_analysis.summary if takeover_analysis else {}) or {} %}
+{% set vulnerable = (takeover_analysis.vulnerable if takeover_analysis else []) or [] %}
+{% set dangling   = (takeover_analysis.dangling_dns if takeover_analysis else []) or [] %}
+
+<div class="sdp-summary">
+    <span class="sdp-chip" style="color:var(--primary-color);">
+        <i class="bi bi-diagram-3-fill"></i>{{ sd|length }} subdomain{{ 's' if sd|length != 1 }}
+    </span>
+    <span class="sdp-chip" style="color:#10b981;">
+        <i class="bi bi-reception-4"></i>{{ active }} active
+    </span>
+    {% if summary.get('total_checked') %}
+    <span class="sdp-chip" style="color:#475569;">
+        <i class="bi bi-search"></i>{{ summary.get('total_checked') }} checked for takeover
+    </span>
+    {% endif %}
+    {% if vulnerable|length > 0 %}
+    <span class="sdp-chip" style="color:#ef4444;">
+        <i class="bi bi-exclamation-octagon-fill"></i>{{ vulnerable|length }} takeover risk{{ 's' if vulnerable|length != 1 }}
+    </span>
+    {% endif %}
+    {% if dangling|length > 0 %}
+    <span class="sdp-chip" style="color:#f59e0b;">
+        <i class="bi bi-plug-fill"></i>{{ dangling|length }} dangling DNS
+    </span>
+    {% endif %}
+</div>
+
+{% if vulnerable|length > 0 %}
+<div class="sdp-alert">
+    <div class="sdp-alert-title">
+        <i class="bi bi-exclamation-octagon-fill" style="color:#ef4444;"></i>
+        Potential Subdomain Takeover
+    </div>
+    {% for item in vulnerable %}
+    <div class="sdp-item">
+        {{ item.subdomain | default(item.target) | default(item) }}
+        {% if item.service %}<span class="sdp-tag sdp-tag-danger">{{ item.service }}</span>{% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if dangling|length > 0 %}
+<div class="sdp-alert sdp-warn">
+    <div class="sdp-alert-title">
+        <i class="bi bi-plug-fill" style="color:#f59e0b;"></i>
+        Dangling DNS Records
+    </div>
+    {% for item in dangling %}
+    <div class="sdp-item">
+        {{ item.subdomain | default(item.target) | default(item) }}
+        {% if item.cname %}<span class="sdp-tag sdp-tag-warning">→ {{ item.cname }}</span>{% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}

@@ -1,5 +1,6 @@
 # utils/credential_sprayer.py
 import asyncio
+import os
 import aiohttp
 import time
 import re
@@ -89,7 +90,7 @@ DEFAULT_USERNAMES_FALLBACK = [
     "finance", "legal", "it", "help", "helpdesk", "noc", "soc",
 ]
 
-DEFAULT_PASSWORDS = [
+DEFAULT_PASSWORDS_FALLBACK = [
     "password", "Password1", "Password123", "password123", "admin",
     "admin123", "Admin123", "123456", "12345678", "1234567890",
     "qwerty", "Qwerty123", "letmein", "welcome", "Welcome1",
@@ -107,8 +108,8 @@ DEFAULT_PASSWORDS = [
     "Company1", "Company123", "Company@123",
 ]
 
-USERNAME_FILE = os.getenv("ARTEX_USERNAMES_FILE", "modules/wordlists/usernames.txt")
-PASSWORD_FILE = os.getenv("ARTEX_PASSWORDS_FILE", "modules/wordlists/password/10-million-password-list-top-1000000.txt")
+USERNAMES_FILE = os.getenv("ARTEX_USERNAMES_FILE", "modules/wordlists/usernames.txt")
+PASSWORDS_FILE = os.getenv("ARTEX_PASSWORDS_FILE", "modules/wordlists/password/10-million-password-list-top-1000000.txt")
 
 DEFAULT_USERNAMES = _load_wordlist(USERNAMES_FILE, DEFAULT_USERNAMES_FALLBACK)
 DEFAULT_PASSWORDS = _load_wordlist(PASSWORDS_FILE, DEFAULT_PASSWORDS_FALLBACK)
