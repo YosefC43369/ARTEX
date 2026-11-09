@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARTEX · OSINT Investigation Console</title>
+<style>
+  :root{
+    --bg:#05080a; --panel:#0a1014; --panel-2:#0d161b; --line:#15303a;
+    --green:#36f39a; --green-dim:#1c7f52; --cyan:#35d6e6; --amber:#f5c451;
+    --red:#ff5c6c; --text:#bfe9d6; --muted:#5f7f74; --mono:"SFMono-Regular",
+    Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg);color:var(--text);font-family:var(--mono);
+    font-size:13px;overflow:hidden;
+  }
+  #rain{position:fixed;inset:0;z-index:0;opacity:.14}
+  .wrap{position:relative;z-index:1;display:flex;flex-direction:column;height:100vh}
+  header{
+    display:flex;align-items:center;gap:14px;padding:12px 18px;
+    border-bottom:1px solid var(--line);background:linear-gradient(90deg,#071015,#0a181d);
+  }
+  header .brand{font-weight:700;letter-spacing:2px;color:var(--green);
+    text-shadow:0 0 8px rgba(54,243,154,.4)}
+  header .brand small{color:var(--muted);font-weight:400;letter-spacing:1px}
+  header input{
+    background:#02070a;border:1px solid var(--line);color:var(--green);
+    padding:7px 10px;border-radius:4px;font-family:var(--mono);min-width:260px;
+    outline:none;
+  }
+  header input:focus{border-color:var(--green-dim);box-shadow:0 0 0 2px rgba(54,243,154,.12)}
+  header label{color:var(--muted);display:flex;align-items:center;gap:6px;cursor:pointer}
+  button.engage{
+    background:var(--green-dim);color:#021;border:none;padding:8px 16px;
+    border-radius:4px;font-family:var(--mono);font-weight:700;letter-spacing:1px;
+    cursor:pointer;transition:.15s;
+  }
+  button.engage:hover{background:var(--green);box-shadow:0 0 12px rgba(54,243,154,.5)}
+  .stats{display:flex;gap:10px;margin-left:auto;flex-wrap:wrap}
+  .stat{background:var(--panel-2);border:1px solid var(--line);border-radius:4px;
+    padding:5px 11px;text-align:center;min-width:64px}
+  .stat b{display:block;color:var(--cyan);font-size:16px;line-height:1.1}
+  .stat span{color:var(--muted);font-size:10px;letter-spacing:1px}
+  main{display:flex;flex:1;min-height:0}
+  #graph{flex:1;min-width:0;position:relative}
+  #graph svg{width:100%;height:100%;display:block}
+  .side{width:380px;border-left:1px solid var(--line);background:var(--panel);
+    display:flex;flex-direction:column;min-height:0}
+  .side h3{margin:0;padding:10px 14px;border-bottom:1px solid var(--line);
+    color:var(--green);letter-spacing:2px;font-size:12px}
+  #log{flex:1;overflow-y:auto;padding:10px 14px;line-height:1.7}
+  #log .l{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #log .t{color:var(--muted)}
+  #log .k{color:var(--amber)}
+  #log .v{color:var(--text)}
+  #log .warn{color:var(--red)}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 12px;padding:10px 14px;
+    border-top:1px solid var(--line)}
+  .legend span{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:11px}
+  .dot{width:9px;height:9px;border-radius:50%}
+  .node circle{cursor:pointer;transition:stroke-width .1s}
+  .node text{fill:var(--text);font-size:9px;pointer-events:none;
+    paint-order:stroke;stroke:#000;stroke-width:2px}
+  .edge{stroke:#1d4a44;stroke-width:1}
+  .foot{padding:6px 14px;border-top:1px solid var(--line);color:var(--muted);
+    font-size:11px}
+  .tip{position:absolute;pointer-events:none;background:#02090c;border:1px solid var(--green-dim);
+    padding:7px 10px;border-radius:4px;font-size:11px;max-width:320px;display:none;z-index:5;
+    box-shadow:0 4px 18px rgba(0,0,0,.6)}
+  .tip b{color:var(--green)}
+  .tip .src{color:var(--muted)}
+</style>
+</head>
+<body>
+<canvas id="rain"></canvas>
+<div class="wrap">
+  <header>
+    <div class="brand">ARTEX<small> // OSINT CONSOLE</small></div>
+    <input id="scanId" placeholder="scan_id" value="{{ scan_id }}">
+    <label><input type="checkbox" id="people"> people</label>
+    <button class="engage" onclick="engage()">ENGAGE</button>
+    <div class="stats" id="stats"></div>
+  </header>
+  <main>
+    <div id="graph">
+      <svg id="svg"></svg>
+      <div class="tip" id="tip"></div>
+    </div>
+    <div class="side">
+      <h3>// INVESTIGATION LOG</h3>
+      <div id="log"></div>
+      <div class="legend" id="legend"></div>
+      <div class="foot" id="foot">idle — enter a scan_id and ENGAGE</div>
+    </div>
+  </main>
+</div>
+<script>
+const COLORS={
+  domain:"#36f39a",subdomain:"#2ad1a0",ip:"#35d6e6",asn:"#6aa0ff",
+  email:"#f5c451",certificate:"#c88bff",technology:"#9aa7b0",url_path:"#7f8c99",
+  nameserver:"#4fd1c5",mail_server:"#f59e7a",credential_leak:"#ff5c6c",
+  organization:"#36f39a",person:"#ffb3c7",username:"#ffd479",phone:"#86e0b0",
+  social_profile:"#8ac6ff",breach:"#ff5c6c"
+};
+const svg=document.getElementById('svg'),log=document.getElementById('log'),
+  tip=document.getElementById('tip');
+let W=0,H=0,sim=null,raf=null;
+
+function size(){const r=svg.getBoundingClientRect();W=r.width;H=r.height;}
+window.addEventListener('resize',()=>{size();});
+
+function logline(cls,k,v){
+  const d=document.createElement('div');d.className='l';
+  const t=new Date().toLocaleTimeString();
+  d.innerHTML=`<span class="t">[${t}]</span> <span class="k ${cls}">${k}</span> <span class="v">${escapeHtml(v)}</span>`;
+  log.appendChild(d);log.scrollTop=log.scrollHeight;
+}
+function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+async function engage(){
+  const id=document.getElementById('scanId').value.trim();
+  if(!id){logline('warn','ERR','no scan_id');return;}
+  const people=document.getElementById('people').checked;
+  const url=(people?`/api/osint/people/${id}`:`/api/osint/graph/${id}`);
+  log.innerHTML='';document.getElementById('foot').textContent='querying '+url+' ...';
+  logline('','QUERY',url);
+  let data;
+  try{const r=await fetch(url);data=await r.json();
+    if(!r.ok){logline('warn','ERR',data.error||('HTTP '+r.status));document.getElementById('foot').textContent='error';return;}
+  }catch(e){logline('warn','ERR',String(e));return;}
+  render(data);
+}
+
+function render(data){
+  const nodes=(data.nodes||[]).map(n=>({...n,
+    x:W/2+(Math.random()-.5)*W*.6,y:H/2+(Math.random()-.5)*H*.6,vx:0,vy:0}));
+  const idx={};nodes.forEach(n=>idx[n.id]=n);
+  const edges=(data.edges||[]).filter(e=>idx[e.source]&&idx[e.target])
+    .map(e=>({...e,s:idx[e.source],t:idx[e.target]}));
+  drawStats(data,nodes,edges);drawLegend(nodes);
+  layout(nodes,edges);
+  streamLog(nodes,edges,data);
+}
+
+function drawStats(data,nodes,edges){
+  const c=(data.entity_counts)||{};const el=document.getElementById('stats');
+  el.innerHTML='';
+  const items=[['NODES',nodes.length],['EDGES',edges.length]];
+  if(typeof data.skipped_out_of_scope==='number')items.push(['OOS-DROP',data.skipped_out_of_scope]);
+  items.forEach(([k,v])=>{el.innerHTML+=`<div class="stat"><b>${v}</b><span>${k}</span></div>`;});
+}
+function drawLegend(nodes){
+  const types=[...new Set(nodes.map(n=>n.type))];
+  document.getElementById('legend').innerHTML=types.map(t=>
+    `<span><i class="dot" style="background:${COLORS[t]||'#888'}"></i>${t}</span>`).join('');
+}
+
+function layout(nodes,edges){
+  size();if(raf)cancelAnimationFrame(raf);
+  svg.innerHTML='';
+  const eG=document.createElementNS('http://www.w3.org/2000/svg','g');
+  const nG=document.createElementNS('http://www.w3.org/2000/svg','g');
+  svg.appendChild(eG);svg.appendChild(nG);
+  const eEls=edges.map(e=>{const l=document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('class','edge');eG.appendChild(l);return l;});
+  const nEls=nodes.map(n=>{
+    const g=document.createElementNS('http://www.w3.org/2000/svg','g');g.setAttribute('class','node');
+    const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    const r=n.type==='domain'||n.type==='organization'?10:6;
+    c.setAttribute('r',r);c.setAttribute('fill',COLORS[n.type]||'#888');
+    c.setAttribute('stroke','#02100b');c.setAttribute('stroke-width','1.5');
+    const tx=document.createElementNS('http://www.w3.org/2000/svg','text');
+    tx.setAttribute('dx',r+3);tx.setAttribute('dy',3);
+    tx.textContent=(n.value||'').length>26?n.value.slice(0,25)+'…':n.value;
+    g.appendChild(c);g.appendChild(tx);nG.appendChild(g);
+    g.addEventListener('mousemove',ev=>showTip(ev,n));
+    g.addEventListener('mouseleave',()=>tip.style.display='none');
+    return {g};
+  });
+  let it=0;const MAX=320;
+  function tick(){
+    for(let i=0;i<nodes.length;i++){const a=nodes[i];
+      for(let j=i+1;j<nodes.length;j++){const b=nodes[j];
+        let dx=a.x-b.x,dy=a.y-b.y,d2=dx*dx+dy*dy||.01,d=Math.sqrt(d2);
+        const f=1600/d2;dx/=d;dy/=d;a.vx+=dx*f;a.vy+=dy*f;b.vx-=dx*f;b.vy-=dy*f;}}
+    edges.forEach(e=>{let dx=e.t.x-e.s.x,dy=e.t.y-e.s.y,d=Math.sqrt(dx*dx+dy*dy)||.01;
+      const f=(d-90)*.01;dx/=d;dy/=d;e.s.vx+=dx*f;e.s.vy+=dy*f;e.t.vx-=dx*f;e.t.vy-=dy*f;});
+    nodes.forEach(n=>{n.vx+=(W/2-n.x)*.0015;n.vy+=(H/2-n.y)*.0015;
+      n.x+=Math.max(-6,Math.min(6,n.vx*.85));n.y+=Math.max(-6,Math.min(6,n.vy*.85));
+      n.vx*=.82;n.vy*=.82;
+      n.x=Math.max(20,Math.min(W-20,n.x));n.y=Math.max(20,Math.min(H-20,n.y));});
+    edges.forEach((e,i)=>{eEls[i].setAttribute('x1',e.s.x);eEls[i].setAttribute('y1',e.s.y);
+      eEls[i].setAttribute('x2',e.t.x);eEls[i].setAttribute('y2',e.t.y);});
+    nodes.forEach((n,i)=>nEls[i].g.setAttribute('transform',`translate(${n.x},${n.y})`));
+    if(++it<MAX)raf=requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+function showTip(ev,n){
+  const rect=document.getElementById('graph').getBoundingClientRect();
+  tip.style.display='block';
+  tip.style.left=(ev.clientX-rect.left+14)+'px';
+  tip.style.top=(ev.clientY-rect.top+14)+'px';
+  tip.innerHTML=`<b>${escapeHtml(n.type)}</b> · ${escapeHtml(n.value)}<br>`+
+    `<span class="src">conf:${escapeHtml(n.confidence||'?')} · status:${escapeHtml(n.validation_status||'?')}</span><br>`+
+    `<span class="src">src: ${escapeHtml((n.sources||[]).join(', ')||'—')}</span>`;
+}
+
+function streamLog(nodes,edges,data){
+  let i=0;const order=[...nodes].sort((a,b)=>a.type.localeCompare(b.type));
+  document.getElementById('foot').textContent=`${nodes.length} entities · ${edges.length} relations`;
+  function step(){
+    if(i>=order.length){
+      if(typeof data.skipped_out_of_scope==='number'&&data.skipped_out_of_scope)
+        logline('warn','SCOPE',`${data.skipped_out_of_scope} out-of-scope entities dropped`);
+      logline('','DONE','investigation graph resolved');return;
+    }
+    const n=order[i++];const cls=n.type==='credential_leak'||n.type==='breach'?'warn':'';
+    logline(cls,n.type.toUpperCase(),n.value+(n.sources&&n.sources.length?`  ⟵ ${n.sources.join(',')}`:''));
+    setTimeout(step,28);
+  }
+  step();
+}
+
+// matrix rain backdrop
+(function(){
+  const c=document.getElementById('rain'),x=c.getContext('2d');
+  function rs(){c.width=innerWidth;c.height=innerHeight;}
+  rs();addEventListener('resize',rs);
+  const cols=()=>Math.floor(c.width/12);let drops=[];
+  function reset(){drops=Array(cols()).fill(1);}reset();addEventListener('resize',reset);
+  const glyphs='01<>/{}#$*=+アカサタナ'.split('');
+  setInterval(()=>{
+    x.fillStyle='rgba(5,8,10,.08)';x.fillRect(0,0,c.width,c.height);
+    x.fillStyle='#1c7f52';x.font='12px monospace';
+    drops.forEach((d,i)=>{const g=glyphs[Math.floor(Math.random()*glyphs.length)];
+      x.fillText(g,i*12,d*12);
+      if(d*12>c.height&&Math.random()>.975)drops[i]=0;drops[i]++;});
+  },60);
+})();
+
+size();
+if(document.getElementById('scanId').value.trim()) engage();
+</script>
+</body>
+</html>

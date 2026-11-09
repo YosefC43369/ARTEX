@@ -57,6 +57,13 @@ class EntityType(StrEnum):
     NAMESERVER = "nameserver"
     MAIL_SERVER = "mail_server"
     CREDENTIAL_LEAK = "credential_leak"
+    # people / entity intelligence (engagement-scoped, public-source only)
+    ORGANIZATION = "organization"
+    PERSON = "person"
+    USERNAME = "username"
+    PHONE = "phone"
+    SOCIAL_PROFILE = "social_profile"
+    BREACH = "breach"
 
 
 class Observation(StrEnum):
@@ -79,6 +86,13 @@ class RelationType(StrEnum):
     RUNS_TECH = "runs_tech"
     EXPOSES_PATH = "exposes_path"
     LEAK_REFERENCES = "leak_references"
+    # people / entity intelligence
+    AFFILIATED_WITH = "affiliated_with"      # person -> organization/domain
+    HAS_USERNAME = "has_username"            # person -> username
+    HAS_PHONE = "has_phone"                  # person -> phone
+    HAS_PROFILE = "has_profile"              # username -> social_profile
+    APPEARS_IN_BREACH = "appears_in_breach"  # email -> breach (metadata only)
+    SAME_PERSON = "same_person"              # inferred identity link
 
 
 _HOST_TYPES = frozenset(
@@ -97,6 +111,20 @@ def _redact_email(value: str) -> str:
         return "[redacted]"
     shown = local[:1] if local else ""
     return f"{shown}{'*' * max(len(local) - 1, 1)}@{domain}"
+
+
+def _redact_phone(value: str) -> str:
+    """Keep the leading '+', the country code and the last two digits; mask the
+    rest. A phone number is PII — the graph proves reachability without
+    publishing the full dialable number."""
+    plus = value.startswith("+")
+    digits = "".join(ch for ch in value if ch.isdigit())
+    if len(digits) < 4:
+        return "[redacted]"
+    cc = digits[:2] if len(digits) <= 10 else digits[:3]
+    tail = digits[-2:]
+    masked = "*" * max(len(digits) - len(cc) - 2, 1)
+    return f"{'+' if plus else ''}{cc}{masked}{tail}"
 
 
 # ── records ─────────────────────────────────────────────────────────────────
@@ -153,6 +181,8 @@ class OsintEntity:
     def display_value(self, redact: bool) -> str:
         if redact and self.etype == EntityType.EMAIL:
             return _redact_email(self.value)
+        if redact and self.etype == EntityType.PHONE:
+            return _redact_phone(self.value)
         return self.value
 
     def to_dict(self, redact: bool = True) -> Dict[str, Any]:

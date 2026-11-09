@@ -1516,6 +1516,87 @@ def osint_graph(scan_id):
         return jsonify(graph.to_summary(redact=redact))
     return jsonify(graph.to_graph_dict(redact=redact))
 
+@app.route('/api/osint/people/<scan_id>', methods=['GET', 'POST'])
+def osint_people(scan_id):
+    """Merge people / entity intelligence into a scan's OSINT graph.
+
+    GET  — derives in-scope *person hints* from the emails the scan already
+           harvested (name inferred from the local-part, tagged accordingly)
+           and returns the unified graph. No new network collection.
+    POST — accepts a people-intelligence profile (JSON) collected by the
+           operator from ToS-respecting public sources, normalises it (scope
+           filtered, PII redacted, secrets stripped, breach data metadata-only)
+           and merges it with the infrastructure graph.
+
+    Query params: format=graph|summary (default graph), redact=1|0 (default 1).
+    """
+    if scan_id not in scan_results:
+        return jsonify({'error': 'Not found'}), 404
+    record = scan_results[scan_id]
+    domain = record.get('domain', '')
+    profile = record.get('osint_correlation')
+
+    from penetration_testing.intelligence.osint import (
+        OsintIntelligenceEngine, OsintGraph, EntityType)
+    from penetration_testing.intelligence.people_osint import (
+        PeopleIntelligenceEngine)
+
+    graph = OsintGraph()
+    if isinstance(profile, dict) and domain:
+        class _PreCollected:
+            def correlate(self, d, scan_results=None, deep=False):
+                return profile
+        try:
+            graph = OsintIntelligenceEngine(
+                correlator=_PreCollected()).investigate(domain)
+        except ValueError:
+            graph = OsintGraph()
+
+    if request.method == 'POST':
+        people_profile = request.get_json(silent=True) or {}
+    else:
+        emails = sorted({e.value for e in graph.of_type(EntityType.EMAIL)})
+        people_profile = {
+            'organization': {'name': domain, 'domain': domain},
+            'people': [
+                {'name': em.split('@')[0], 'emails': [em],
+                 'source': 'email_derived_inference'}
+                for em in emails
+            ],
+        }
+
+    target = (domain
+              or (people_profile.get('organization', {}) or {}).get('domain', ''))
+    if not target:
+        return jsonify({'error': 'No target domain for this scan'}), 400
+
+    class _PeopleCollector:
+        def collect(self, t, scope=None, deep=False):
+            return people_profile
+    engine = PeopleIntelligenceEngine(collector=_PeopleCollector())
+    try:
+        engine.investigate(target, graph=graph)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    redact = request.args.get('redact', '1') != '0'
+    if request.args.get('format') == 'summary':
+        out = graph.to_summary(redact=redact)
+        out['skipped_out_of_scope'] = engine.skipped_out_of_scope
+        return jsonify(out)
+    out = graph.to_graph_dict(redact=redact)
+    out['skipped_out_of_scope'] = engine.skipped_out_of_scope
+    return jsonify(out)
+
+
+@app.route('/osint/console')
+@app.route('/osint/console/<scan_id>')
+def osint_console(scan_id=None):
+    """Live investigation console — a graph/stream view over a scan's unified
+    OSINT entity graph (served from the read-only graph APIs)."""
+    return render_template('osint_console.html', scan_id=scan_id or '')
+
+
 # ── Penetration-testing subsystem routes ─────────────────────────────────────
 def _pentest_guard():
     if pentest_agent is None:
