@@ -25,13 +25,19 @@ import time
 from typing import Any, Dict, List
 
 from ..constants import Severity, ValidationStatus
+from ..intelligence.remediation import RemediationAdvisor
 from ..models import EngagementSession, Finding, Target
 
 
 class Reporter:
-    def __init__(self, session: EngagementSession, target: Target):
+    def __init__(self, session: EngagementSession, target: Target,
+                 advisor: RemediationAdvisor = None):
         self.session = session
         self.target = target
+        self.advisor = advisor or RemediationAdvisor()
+        # Enrich findings with remediation / references / CWE-MITRE for reporting.
+        # Non-promoting: only blank fields are filled; statuses are untouched.
+        self.advisor.enrich_session(session)
 
     # ── public API ───────────────────────────────────────────────────────────
     def build(self, formats: List[str]) -> Dict[str, str]:
@@ -150,6 +156,7 @@ class Reporter:
              if f.demonstrated_impact else ""),
             (f"- **Potential impact:** {f.potential_impact}" if f.potential_impact else ""),
             f"- **Remediation:** {f.remediation}",
+            (f"- **References:** {', '.join(f.references)}" if f.references else ""),
             f"- **Evidence:** {', '.join(f.evidence_ids) or 'n/a'}",
             "",
         ]
@@ -162,11 +169,14 @@ class Reporter:
         rows = []
         for f in self.session.findings:
             badge = "confirmed" if f.validation_status == ValidationStatus.CONFIRMED else "potential"
+            cwe_tag = f"<br><span class='muted' style='font-size:.72rem'>{esc(f.cwe)}" \
+                      + (f" · ATT&amp;CK {esc(', '.join(f.mitre))}" if f.mitre else "") \
+                      + "</span>" if f.cwe else ""
             rows.append(
                 f"<tr class='sev-{f.severity.value}'>"
                 f"<td>{esc(f.severity.value.upper())}</td>"
                 f"<td>{esc(f.title)}</td>"
-                f"<td>{esc(f.category.value)}</td>"
+                f"<td>{esc(f.category.value)}{cwe_tag}</td>"
                 f"<td><span class='badge {badge}'>{esc(f.validation_status.value)}</span></td>"
                 f"<td><code>{esc(f.endpoint)}</code></td>"
                 f"<td>{esc(f.remediation)}</td></tr>"
