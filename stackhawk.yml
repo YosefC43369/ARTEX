@@ -1,0 +1,90 @@
+# StackHawk HawkScan configuration for ARTEX
+# ------------------------------------------------------------------------------
+# ARTEX is a Flask app (python app.py -> http://127.0.0.1:5000) that serves both
+# HTML pages and JSON APIs, behind a form-login auth gate. There is no OpenAPI
+# spec, so scanning is spider + seedPaths driven.
+#
+# Nothing sensitive is hardcoded — every deployment-specific value is an env var.
+# Before the first scan:
+#   1) Create the app in StackHawk (or `hawk op app list`) and set HAWK_APP_ID.
+#   2) Start ARTEX:  python app.py   (or set APP_HOST for another target)
+#   3) Create a scan account (first run: open /setup to make the admin), then
+#      export SCAN_USER / SCAN_PASSWORD for that account.
+#   4) Validate:  hawk validate config stackhawk.yml
+#                 hawk validate auth   stackhawk.yml
+#   5) Scan:      APP_HOST=http://localhost:5000 hawk scan
+#
+# NOTE: verify the authentication block against your hawk version with
+#       `hawk config show app.authentication --text` — the schema can change.
+
+app:
+  # UUID of the Application in StackHawk. Reused across scans; never created per scan.
+  applicationId: ${HAWK_APP_ID}
+  # Environment groups scan history; findings compare scan-to-scan within an env.
+  env: ${APP_ENV:Development}
+  # Full target URL. HawkScan accepts self-signed certs, so https works too.
+  host: ${APP_HOST:http://localhost:5000}
+
+  # Spider from the main entry points. Most routes require login (configured
+  # below); the scanner authenticates, then crawls from these seeds.
+  excludePaths:
+    - "^/logout$"          # don't let the crawler log itself out
+    - "^/static/.*"        # static assets add noise, not attack surface
+
+  # ── Authentication ─────────────────────────────────────────────────────────
+  # ARTEX uses a server-side form login: POST /login with `username` & `password`,
+  # which sets a session cookie. A logged-in session shows a "Logout" link in the
+  # nav; a logged-out one shows "Login".
+  #
+  # The scan account must already exist (create it via /setup on first run, or in
+  # the Admin console). Provide it via env vars — never hardcode credentials.
+  authentication:
+    # Regex that appears ONLY when authenticated (the nav Logout link) ...
+    loggedInIndicator: "Logout \\("
+    # ... and one that appears ONLY when logged out (the Login link / page).
+    loggedOutIndicator: "ARTEX // <span>ACCESS</span>|href=\"/login\""
+
+    # A path that returns 200 only when authenticated (401/403 otherwise).
+    # /api/capabilities is JSON and gated by the login requirement.
+    testPath:
+      path: /api/capabilities
+      success: "^(200)$"
+
+    usernamePassword:
+      type: FORM
+      loginPath: /login
+      usernameField: username
+      passwordField: password
+      scanUsername: ${SCAN_USER}
+      scanPassword: ${SCAN_PASSWORD}
+
+hawk:
+  spider:
+    # ARTEX is mostly server-rendered HTML; the standard spider is sufficient.
+    # (Set ajax: true only if a client-rendered SPA surface is added later.)
+    base: true
+    maxDurationMinutes: ${SPIDER_MAX_MINUTES:10}
+    seedPaths:
+      - /
+      - /about
+      - /history
+      - /pentest
+      - /health
+      - /api/capabilities
+  scan:
+    # Keep false "target crashed" aborts from stopping on slow scan endpoints.
+    crashDetection:
+      action: WARN
+
+# ── Tags ──────────────────────────────────────────────────────────────────────
+# Traceability + StackHawk agent attribution + ASM repo association.
+tags:
+  - name: _STACKHAWK_AGENT
+    value: ${HAWK_AGENT:none}
+  - name: _STACKHAWK_GIT_COMMIT_SHA
+    value: ${COMMIT_SHA:none}
+  - name: _STACKHAWK_GIT_BRANCH
+    value: ${BRANCH_NAME:none}
+  # Repo-linking fallback (used when the app isn't auto-linked in ASM).
+  - name: git_origin
+    value: github.com/YosefC43369/ARTEX
