@@ -23,7 +23,8 @@ def test_health_and_targets(client):
     assert h.status_code == 200
     assert h.get_json()["status"] == "healthy"
     targets = client.get("/pentest/targets").get_json()["targets"]
-    assert any(t["identifier"] == "example-target" for t in targets)
+    # config.xml uses the simple URL-only form; id defaults to the host
+    assert any(t["identifier"] == "example.com" for t in targets)
 
 
 def test_capabilities(client):

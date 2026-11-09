@@ -159,8 +159,58 @@ class ModuleBridge:
             self._invoke_takeover)
         self._try_register(
             "scan.ports", Phase.TESTING, "port_scan",
-            "Scan common ports via existing PortScanner (non-destructive).",
+            "Scan common ports via existing PortScanner.",
             "modules.port_scanner", "PortScanner", self._invoke_ports)
+
+        # ── active / offensive capabilities (red-team) ───────────────────────
+        self._try_register(
+            "attack.web_vuln", Phase.TESTING, "web_vuln",
+            "Active web vulnerability scan via existing WebVulnScanner.",
+            "modules.web_vuln_scanner", "WebVulnScanner", self._invoke_web_vuln)
+        self._try_register(
+            "attack.dir_bruteforce", Phase.TESTING, "dir_bruteforce",
+            "Directory/content brute-force via existing DirectoryBruteforcer.",
+            "modules.dir_bruteforce", "DirectoryBruteforcer", self._invoke_dir_bruteforce)
+        self._try_register(
+            "attack.bypass_403", Phase.TESTING, "bypass_403",
+            "Access-control (403) bypass probing via existing Bypass403Scanner.",
+            "modules.bypass_403", "Bypass403Scanner", self._invoke_bypass_403)
+        self._try_register(
+            "attack.ssti", Phase.TESTING, "ssti",
+            "Server-side template injection testing via existing SSTIScanner.",
+            "modules.ssti_scanner", "SSTIScanner", self._invoke_ssti)
+        self._try_register(
+            "attack.jwt", Phase.TESTING, "jwt_analysis",
+            "JWT weakness analysis via existing JWTAnalyzer.",
+            "modules.jwt_analyzer", "JWTAnalyzer", self._invoke_jwt)
+        self._try_register(
+            "attack.db_files", Phase.TESTING, "db_file_hunt",
+            "Exposed database/backup file hunting via existing DBFileHunter.",
+            "modules.db_file_hunter", "DBFileHunter", self._invoke_db_files)
+        self._try_register(
+            "attack.cors", Phase.TESTING, "cors_test",
+            "CORS misconfiguration testing via existing CorsTester.",
+            "core.cors_tester", "CorsTester", self._invoke_cors)
+        self._try_register(
+            "attack.ssrf", Phase.TESTING, "ssrf_test",
+            "SSRF probing via existing SsrfProbe.",
+            "core.ssrf_probe", "SsrfProbe", self._invoke_ssrf)
+        self._try_register(
+            "attack.xxe", Phase.TESTING, "xxe_test",
+            "XXE injection testing via existing XxeInjector.",
+            "core.xxe_injector", "XxeInjector", self._invoke_xxe)
+        self._try_register(
+            "attack.lfi", Phase.TESTING, "lfi_test",
+            "Local/remote file inclusion testing via existing LfiRfi.",
+            "core.lfi_rfi", "LfiRfi", self._invoke_lfi)
+        self._try_register(
+            "attack.auth_bypass", Phase.TESTING, "auth_bypass",
+            "Authentication bypass testing via existing AuthBypass.",
+            "core.auth_bypass", "AuthBypass", self._invoke_auth_bypass)
+        self._try_register(
+            "attack.vuln_scan", Phase.TESTING, "vuln_scan",
+            "Injection/access-control vulnerability scan via existing VulnScanner.",
+            "core.vuln_scanner", "VulnScanner", self._invoke_vuln_scan)
 
     # ── public API ──────────────────────────────────────────────────────────
     def list_capabilities(self, available_only: bool = True) -> List[CapabilitySpec]:
@@ -265,3 +315,59 @@ class ModuleBridge:
         ports = ctx.params.get("ports", "80,443,8080,8443")
         results = PortScanner().batch_scan([ctx.target.domain], ports=ports)
         return {"port_scan": [r for r in (results or []) if r is not None]}
+
+    # ── active / offensive adapters ──────────────────────────────────────────
+    def _invoke_web_vuln(self, ctx: InvocationContext) -> Dict[str, Any]:
+        from modules.web_vuln_scanner import WebVulnScanner
+        return {"web_vuln": WebVulnScanner(target_url=ctx.target.url).scan(ctx.target.domain)}
+
+    def _invoke_dir_bruteforce(self, ctx: InvocationContext) -> Dict[str, Any]:
+        from modules.dir_bruteforce import DirectoryBruteforcer
+        return {"dir_bruteforce": DirectoryBruteforcer(
+            target_url=ctx.target.url, recursive=False, max_workers=20).scan()}
+
+    def _invoke_bypass_403(self, ctx: InvocationContext) -> Dict[str, Any]:
+        from modules.bypass_403 import Bypass403Scanner
+        return {"bypass_403": Bypass403Scanner(
+            target_url=ctx.target.url,
+            known_403_urls=ctx.params.get("known_403", []), max_workers=20).scan()}
+
+    def _invoke_ssti(self, ctx: InvocationContext) -> Dict[str, Any]:
+        from modules.ssti_scanner import SSTIScanner
+        return {"ssti": SSTIScanner(
+            target_url=ctx.target.url, known_params=ctx.params.get("known_params", {}),
+            rate_delay=0.2, max_workers=12).scan()}
+
+    def _invoke_jwt(self, ctx: InvocationContext) -> Dict[str, Any]:
+        from modules.jwt_analyzer import JWTAnalyzer
+        return {"jwt": JWTAnalyzer(
+            target_url=ctx.target.url, known_tokens=ctx.params.get("known_tokens", []),
+            rate_delay=0.2, max_workers=12).scan()}
+
+    def _invoke_db_files(self, ctx: InvocationContext) -> Dict[str, Any]:
+        from modules.db_file_hunter import DBFileHunter
+        return {"db_files": DBFileHunter(target_url=ctx.target.url, max_workers=16).scan()}
+
+    def _invoke_cors(self, ctx: InvocationContext) -> Dict[str, Any]:
+        from core.cors_tester import CorsTester
+        return {"cors": CorsTester().run(domain=ctx.target.domain, scan_results={})}
+
+    def _invoke_ssrf(self, ctx: InvocationContext) -> Dict[str, Any]:
+        from core.ssrf_probe import SsrfProbe
+        return {"ssrf": SsrfProbe().run(domain=ctx.target.domain, scan_results={})}
+
+    def _invoke_xxe(self, ctx: InvocationContext) -> Dict[str, Any]:
+        from core.xxe_injector import XxeInjector
+        return {"xxe": XxeInjector().run(domain=ctx.target.domain, scan_results={})}
+
+    def _invoke_lfi(self, ctx: InvocationContext) -> Dict[str, Any]:
+        from core.lfi_rfi import LfiRfi
+        return {"lfi": LfiRfi().run(domain=ctx.target.domain, scan_results={})}
+
+    def _invoke_auth_bypass(self, ctx: InvocationContext) -> Dict[str, Any]:
+        from core.auth_bypass import AuthBypass
+        return {"auth_bypass": AuthBypass().run(domain=ctx.target.domain, scan_results={})}
+
+    def _invoke_vuln_scan(self, ctx: InvocationContext) -> Dict[str, Any]:
+        from core.vuln_scanner import VulnScanner
+        return {"vuln_scan": VulnScanner().run(domain=ctx.target.domain, scan_results={})}

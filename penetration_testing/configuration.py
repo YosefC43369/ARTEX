@@ -44,15 +44,14 @@ from .models import Target
 
 # Capabilities a target may be granted. Anything not here cannot be enabled.
 KNOWN_CAPABILITIES = {
-    "recon",                 # passive discovery (subdomains, dns, tech)
-    "tls_inspection",
-    "http_analysis",
-    "header_analysis",
-    "port_scan",             # active but non-destructive
-    "subdomain_takeover",
-    "active_web_testing",    # non-destructive injection *indicators* only
+    # passive / discovery
+    "recon", "tls_inspection", "http_analysis", "header_analysis",
+    "subdomain_takeover", "llm_planning",
+    # active / offensive (red-team) — granted by default when no <permissions>
+    "port_scan", "web_vuln", "dir_bruteforce", "bypass_403", "ssti",
+    "jwt_analysis", "cors_test", "ssrf_test", "xxe_test", "lfi_test",
+    "auth_bypass", "vuln_scan", "db_file_hunt", "active_web_testing",
     "api_testing",
-    "llm_planning",          # allow OpenRouter-assisted planning
 }
 
 
@@ -242,6 +241,9 @@ class ConfigLoader:
         single = node.findtext("url")          # direct child only (not inside <urls>)
         if single and single.strip():
             urls.append(_normalize_url(single))
+        # Simplest form: <target>https://example.com</target> (url as text).
+        if node.text and node.text.strip():
+            urls.append(_normalize_url(node.text))
         legacy_domain = node.findtext("domain")   # backward compat
         if legacy_domain and legacy_domain.strip():
             urls.append(_normalize_url(legacy_domain))
@@ -254,23 +256,21 @@ class ConfigLoader:
         return out
 
     def _parse_target(self, node: ET.Element) -> Target:
-        identifier = (node.get("id") or node.findtext("id") or "").strip()
-        if not identifier:
-            raise ConfigurationError("A <target> is missing its id (fail-closed).")
-
         urls = self._collect_urls(node)
         if not urls:
-            raise ConfigurationError(
-                "Target has no <url> (fail-closed).", detail=identifier)
+            raise ConfigurationError("A <target> has no URL (fail-closed).")
         url = urls[0]
         domain = urlparse(url).hostname or ""
         if not domain:
-            raise ConfigurationError(
-                "Target primary <url> has no host (fail-closed).",
-                detail=f"{identifier}: {url}")
+            raise ConfigurationError("Target URL has no host (fail-closed).", detail=url)
+        # id defaults to the host when not given (the simplest config form is
+        # just <target>https://host</target>).
+        identifier = (node.get("id") or node.findtext("id") or domain).strip()
 
-        protocols = _split_csv(node.findtext("allowed_protocols")) or ["https"]
-        ports_raw = _split_csv(node.findtext("allowed_ports")) or ["443"]
+        # Active-testing-friendly defaults: an authorized red-team engagement
+        # usually needs both schemes and the common web ports.
+        protocols = _split_csv(node.findtext("allowed_protocols")) or ["https", "http"]
+        ports_raw = _split_csv(node.findtext("allowed_ports")) or ["80", "443", "8080", "8443"]
         try:
             ports = [int(p) for p in ports_raw]
         except ValueError as exc:
@@ -302,7 +302,7 @@ class ConfigLoader:
             domain=domain,
             urls=urls,
             allowed_domains=allowed_domains,
-            allow_wildcard_subdomains=_as_bool(node.findtext("allow_wildcard_subdomains"), False),
+            allow_wildcard_subdomains=_as_bool(node.findtext("allow_wildcard_subdomains"), True),
             allowed_protocols=[p.lower() for p in protocols],
             allowed_ports=ports,
             allowed_paths=_split_csv(node.findtext("allowed_paths")),

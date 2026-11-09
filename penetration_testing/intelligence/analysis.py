@@ -46,6 +46,31 @@ _PORT_RISK_TO_SEVERITY = {
     "medium": Severity.MEDIUM, "low": Severity.LOW, "info": Severity.INFO,
 }
 
+# Active capability -> vulnerability category for the generic extractor.
+_ACTIVE_CATEGORY = {
+    "attack.web_vuln": VulnCategory.MISCONFIGURATION,
+    "attack.dir_bruteforce": VulnCategory.INFO_EXPOSURE,
+    "attack.bypass_403": VulnCategory.BROKEN_ACCESS_CONTROL,
+    "attack.ssti": VulnCategory.SSTI,
+    "attack.jwt": VulnCategory.JWT,
+    "attack.db_files": VulnCategory.INFO_EXPOSURE,
+    "attack.cors": VulnCategory.CORS,
+    "attack.ssrf": VulnCategory.SSRF,
+    "attack.xxe": VulnCategory.XXE,
+    "attack.lfi": VulnCategory.PATH_TRAVERSAL,
+    "attack.auth_bypass": VulnCategory.BROKEN_ACCESS_CONTROL,
+    "attack.vuln_scan": VulnCategory.MISCONFIGURATION,
+}
+
+# Keys under which the active modules tend to return their finding lists.
+_FINDING_LIST_KEYS = ("findings", "results", "vulnerabilities", "hits",
+                      "candidates", "issues", "exposed", "matches")
+
+_SEV_WORDS = {
+    "critical": Severity.CRITICAL, "high": Severity.HIGH, "medium": Severity.MEDIUM,
+    "low": Severity.LOW, "info": Severity.INFO, "informational": Severity.INFO,
+}
+
 
 class AnalysisEngine:
     def __init__(self, evidence: EvidenceStore, logger: Optional[logging.Logger] = None):
@@ -64,6 +89,8 @@ class AnalysisEngine:
             "recon.subdomains": self._from_subdomains,
         }
         handler = dispatch.get(task.capability)
+        if handler is None and task.capability in _ACTIVE_CATEGORY:
+            handler = self._from_active
         if handler is None:
             return []
         try:
@@ -241,6 +268,93 @@ class AnalysisEngine:
     def _tls_summary(tls: Dict[str, Any]) -> Dict[str, Any]:
         return {k: tls.get(k) for k in ("subject", "issuer", "not_after", "expired")
                 if k in tls}
+
+    # ── generic extractor for active/offensive module output ─────────────────
+    def _from_active(self, task: Task, target: Target) -> List[Finding]:
+        """Surface findings from an active offensive module.
+
+        Active-test results are classified ``POTENTIAL`` (not CONFIRMED): a
+        red-team operator verifies them before claiming exploitability. The raw
+        item is recorded as evidence so the finding is traceable.
+        """
+        cap = task.capability
+        category = _ACTIVE_CATEGORY.get(cap, VulnCategory.MISCONFIGURATION)
+        data = next(iter(task.result.values()), {}) if task.result else {}
+        items = self._extract_items(data)
+        findings: List[Finding] = []
+        for item in items[:25]:
+            sev = self._item_severity(item)
+            if sev.rank < Severity.LOW.rank:
+                continue
+            ev_id = self._record(
+                target.identifier, task.task_id, f"{cap} result",
+                {"item": item if isinstance(item, dict) else str(item)})
+            findings.append(self._finish(Finding(
+                target_id=target.identifier,
+                category=category,
+                title=self._item_title(cap, item, category),
+                description=self._item_desc(item),
+                endpoint=self._item_endpoint(item, target),
+                technical_detail=str(item)[:400] if not isinstance(item, dict) else "",
+                evidence_ids=[ev_id] if ev_id else [],
+                severity=sev,
+                confidence=Confidence.MEDIUM,
+                validation_status=ValidationStatus.POTENTIAL,
+                potential_impact="Active-test indicator — verify manually before "
+                                 "asserting exploitability.",
+                remediation=(item.get("remediation", "") if isinstance(item, dict) else ""),
+            )))
+        return findings
+
+    @staticmethod
+    def _extract_items(data: Any) -> List[Any]:
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            for key in _FINDING_LIST_KEYS:
+                val = data.get(key)
+                if isinstance(val, list) and val:
+                    return val
+            # nested: some modules wrap under a single sub-dict
+            for val in data.values():
+                if isinstance(val, dict):
+                    for key in _FINDING_LIST_KEYS:
+                        inner = val.get(key)
+                        if isinstance(inner, list) and inner:
+                            return inner
+        return []
+
+    @staticmethod
+    def _item_severity(item: Any) -> Severity:
+        if isinstance(item, dict):
+            raw = str(item.get("severity") or item.get("risk") or
+                      item.get("level") or "medium").lower()
+            return _SEV_WORDS.get(raw, Severity.MEDIUM)
+        return Severity.MEDIUM
+
+    @staticmethod
+    def _item_title(cap: str, item: Any, category: VulnCategory) -> str:
+        label = cap.split(".", 1)[-1].replace("_", " ")
+        if isinstance(item, dict):
+            t = item.get("title") or item.get("name") or item.get("type") \
+                or item.get("variant")
+            if t:
+                return f"{label}: {t}"
+        return f"{label} indicator ({category.value})"
+
+    @staticmethod
+    def _item_desc(item: Any) -> str:
+        if isinstance(item, dict):
+            return str(item.get("description") or item.get("detail")
+                       or item.get("evidence") or item.get("summary") or "")[:400]
+        return str(item)[:400]
+
+    @staticmethod
+    def _item_endpoint(item: Any, target: Target) -> str:
+        if isinstance(item, dict):
+            return str(item.get("url") or item.get("endpoint")
+                       or item.get("path") or item.get("parameter") or target.url)
+        return target.url
 
     # ── session finalization: dedupe, FP filter, correlate ──────────────────
     def finalize(self, session: EngagementSession) -> Dict[str, Any]:

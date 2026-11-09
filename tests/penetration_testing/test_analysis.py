@@ -70,6 +70,30 @@ def test_confirmed_requires_evidence(target):
     assert findings == []  # dropped by is_consistent() filter
 
 
+def test_active_findings_are_potential(evidence, target):
+    eng = AnalysisEngine(evidence)
+    t = _task("attack.ssrf", {"ssrf": {"findings": [
+        {"url": "https://example.com/fetch?u=x", "severity": "high",
+         "title": "SSRF parameter"}]}})
+    findings = eng.analyze_task(EngagementSession(target_id="t1"), t, target)
+    assert findings
+    assert findings[0].category == VulnCategory.SSRF
+    assert findings[0].validation_status == ValidationStatus.POTENTIAL
+    assert findings[0].severity == Severity.HIGH
+    assert findings[0].evidence_ids
+
+
+def test_active_extractor_handles_list_and_empty(evidence, target):
+    eng = AnalysisEngine(evidence)
+    # bare list form
+    t1 = _task("attack.dir_bruteforce", {"dir_bruteforce": [
+        {"path": "/admin", "severity": "medium"}]})
+    assert eng.analyze_task(EngagementSession(target_id="t1"), t1, target)
+    # empty / no findings -> no crash, no findings
+    t2 = _task("attack.xxe", {"xxe": {}})
+    assert eng.analyze_task(EngagementSession(target_id="t1"), t2, target) == []
+
+
 def test_finalize_dedupes_and_sorts(evidence, target):
     eng = AnalysisEngine(evidence)
     session = EngagementSession(target_id="t1")

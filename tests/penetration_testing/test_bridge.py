@@ -16,6 +16,14 @@ def test_capabilities_registered(bridge):
     assert bridge.has("recon.subdomains")
 
 
+def test_active_capabilities_registered(bridge):
+    names = {s.name for s in bridge.list_capabilities(available_only=False)}
+    # the offensive arsenal is wired from the existing ARTEX modules
+    for cap in ("attack.web_vuln", "attack.ssrf", "attack.ssti",
+                "attack.cors", "attack.auth_bypass", "attack.dir_bruteforce"):
+        assert cap in names
+
+
 def test_unknown_capability_raises(bridge, target):
     with pytest.raises(ModuleNotRegistered):
         bridge.invoke("does.not.exist", target)

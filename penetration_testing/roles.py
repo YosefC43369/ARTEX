@@ -79,14 +79,49 @@ _BUILTIN: Dict[str, Role] = {
             icon="🎯",
         ),
         Role(
+            identifier="web-app-attacker",
+            name="Web Application Attacker",
+            description="Active web exploitation: injection, access control, "
+                        "CORS, SSTI, JWT.",
+            focus="Attack the web application: probe for injection, broken "
+                  "access control, SSTI, SSRF, LFI, CORS and JWT weaknesses.",
+            capabilities=[
+                "recon.tech", "attack.vuln_scan", "attack.web_vuln",
+                "attack.dir_bruteforce", "attack.bypass_403", "attack.cors",
+                "attack.ssrf", "attack.xxe", "attack.lfi", "attack.ssti",
+                "attack.jwt", "attack.auth_bypass", "attack.db_files",
+            ],
+            icon="⚔️",
+        ),
+        Role(
+            identifier="red-team",
+            name="Red Team Operation",
+            description="Recon-to-exploitation: discovery first, then the full "
+                        "active offensive arsenal.",
+            focus="Run a full red-team assessment: map the surface, then attack "
+                  "it with the complete active capability set.",
+            capabilities=[
+                "recon.subdomains", "recon.dns", "recon.tech", "scan.ports",
+                "attack.vuln_scan", "attack.web_vuln", "attack.dir_bruteforce",
+                "attack.bypass_403", "attack.cors", "attack.ssrf", "attack.xxe",
+                "attack.lfi", "attack.ssti", "attack.jwt", "attack.auth_bypass",
+                "attack.db_files",
+            ],
+            icon="🚩",
+        ),
+        Role(
             identifier="full-spectrum",
             name="Full-Spectrum Assessment",
-            description="All permitted capabilities, breadth-first.",
-            focus="Run a broad, non-destructive assessment across every "
-                  "permitted capability.",
+            description="Every permitted capability, recon through active testing.",
+            focus="Run a broad red-team assessment across every permitted "
+                  "capability, discovery first then active testing.",
             capabilities=[
                 "recon.subdomains", "recon.dns", "recon.tech", "tls.inspect",
                 "http.headers", "recon.takeover", "recon.email", "scan.ports",
+                "attack.vuln_scan", "attack.web_vuln", "attack.dir_bruteforce",
+                "attack.bypass_403", "attack.cors", "attack.ssrf", "attack.xxe",
+                "attack.lfi", "attack.ssti", "attack.jwt", "attack.auth_bypass",
+                "attack.db_files",
             ],
             icon="🛰️",
         ),

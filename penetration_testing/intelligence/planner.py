@@ -31,6 +31,7 @@ from ..models import EngagementSession, Target, Task
 # Deterministic baseline order (phase-sensible). Only capabilities that are both
 # available in the bridge and permitted for the target survive filtering.
 _DEFAULT_ORDER = [
+    # recon / discovery first
     "recon.subdomains",
     "recon.dns",
     "recon.tech",
@@ -39,7 +40,22 @@ _DEFAULT_ORDER = [
     "recon.takeover",
     "recon.email",
     "scan.ports",
+    # then active / offensive capabilities
+    "attack.vuln_scan",
+    "attack.web_vuln",
+    "attack.dir_bruteforce",
+    "attack.bypass_403",
+    "attack.cors",
+    "attack.ssrf",
+    "attack.xxe",
+    "attack.lfi",
+    "attack.ssti",
+    "attack.jwt",
+    "attack.auth_bypass",
+    "attack.db_files",
 ]
+
+_ACTIVE_CAPS = [c for c in _DEFAULT_ORDER if c.startswith("attack.")]
 
 def apply_default_order(capabilities: List[str]) -> List[str]:
     """Order capabilities by the phase-sensible default, keeping extras last."""
@@ -57,6 +73,7 @@ _PHASE_BY_CAP = {
     "http.headers": Phase.ANALYSIS,
     "recon.takeover": Phase.ANALYSIS,
     "scan.ports": Phase.TESTING,
+    **{c: Phase.TESTING for c in _ACTIVE_CAPS},
 }
 
 

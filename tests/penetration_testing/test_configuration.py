@@ -59,6 +59,35 @@ def test_url_only_multi_url(tmp_path):
     assert "app.example.org" in t.allowed_domains
 
 
+def test_simple_url_target_grants_all_capabilities(tmp_path):
+    p = tmp_path / "simple.xml"
+    p.write_text("""<artex_pentest><targets>
+      <target>https://example.com</target>
+    </targets></artex_pentest>""")
+    s = load_settings(str(p))
+    t = s.get_target("example.com")        # id defaults to host
+    assert t is not None
+    assert t.url == "https://example.com"
+    # no <permissions> block => every capability (incl. active) is granted
+    assert t.has_permission("recon") is True
+    assert t.has_permission("web_vuln") is True
+    assert t.has_permission("ssrf_test") is True
+    # active-friendly defaults
+    assert t.allow_wildcard_subdomains is True
+    assert 80 in t.allowed_ports and 443 in t.allowed_ports
+
+
+def test_explicit_permissions_still_restrict(tmp_path):
+    p = tmp_path / "restricted.xml"
+    p.write_text("""<artex_pentest><targets>
+      <target id="r"><url>https://example.com</url>
+        <permissions><recon>true</recon></permissions></target>
+    </targets></artex_pentest>""")
+    t = load_settings(str(p)).get_target("r")
+    assert t.has_permission("recon") is True
+    assert t.has_permission("web_vuln") is False   # not listed => denied
+
+
 def test_legacy_domain_backcompat(tmp_path):
     p = tmp_path / "legacy.xml"
     p.write_text("""<artex_pentest><targets>

@@ -1,94 +1,54 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ARTEX Autonomous Penetration-Testing Subsystem — scope configuration.
+  ARTEX Red-Team Scope — authorized targets.
 
-  SAFETY CONTRACT (enforced in the Python backend, not by prompts):
-    * This file is the ONLY source of authorization. If it is missing or
-      invalid, the subsystem refuses to start (fail-closed).
-    * A target that is not listed here can never be assessed.
-    * Capabilities default to FALSE. A target may only use a capability that is
-      explicitly set to true below.
-    * Runtime limits are clamped to hard safety ceilings in code.
+  USAGE (the simple case): just list the authorized URLs. Each <target> is one
+  URL you have written permission to test. That URL is the authorization, and
+  ARTEX will run its full offensive capability set (recon + active testing)
+  against it, confined to that target's domain.
 
-  URL-ONLY SCHEMA
-    Each target is defined by one or more <url> entries inside <urls>. The host
-    of every URL is placed in scope automatically; there is no separate <domain>
-    field. Add as many <url> entries as you need.
+      <target>https://clientsite.com</target>
 
-  Edit this file to define YOUR OWN authorized targets. Only assess systems you
-  own or have explicit written permission to test.
+  Only assess systems you own or have explicit written permission to test.
+
+  SAFETY RAILS still enforced in code regardless of this file:
+    * A target not listed here can never be touched (fail-closed).
+    * Testing is confined to the target's domain (and its subdomains).
+    * Hosts that resolve to private/loopback/internal IPs are blocked.
+    * Per-target request-rate limiting applies.
+
+  OPTIONAL: to RESTRICT a target to specific capabilities, give it an explicit
+  <permissions> block (otherwise every capability is granted). See the commented
+  example at the bottom.
 -->
 <artex_pentest>
 
   <engagement>
-    <autonomous_enabled>false</autonomous_enabled>
-
-    <!-- Bounds (clamped to code ceilings: iters<=100, runtime<=3600s, conc<=16,
-         rps<=20, tasks<=500). The loop stops when ANY bound trips. -->
-    <max_iterations>25</max_iterations>
-    <max_runtime_seconds>1200</max_runtime_seconds>
-    <max_concurrency>4</max_concurrency>
-    <max_requests_per_second>2.0</max_requests_per_second>
-    <max_tasks>200</max_tasks>
-
-    <evidence_enabled>true</evidence_enabled>
-    <evidence_dir></evidence_dir>
-
+    <autonomous_enabled>true</autonomous_enabled>
     <report_formats>json,markdown,html</report_formats>
-    <log_level>INFO</log_level>
-
-    <features>
-      <llm_planning>true</llm_planning>
-    </features>
+    <evidence_enabled>true</evidence_enabled>
   </engagement>
 
   <targets>
+    <!-- The simplest form: one authorized URL per line. -->
+    <target>https://example.com</target>
+    <target>https://www.example.com</target>
+  </targets>
 
-    <!-- Sample target. Replace with your own authorized scope.
-         Add one or more <url> lines; every URL's host becomes in-scope. -->
-    <target id="example-target">
+  <!--
+  OPTIONAL restricted target (only runs the listed capabilities):
+
+  <targets>
+    <target id="recon-only">
       <urls>
-        <url>https://example.com</url>
-        <url>https://www.example.com</url>
-        <!-- <url>https://api.example.com</url> -->
+        <url>https://staging.client.com</url>
       </urls>
-
-      <allow_wildcard_subdomains>true</allow_wildcard_subdomains>
-      <allowed_protocols>https</allowed_protocols>
-      <allowed_ports>443</allowed_ports>
-
-      <!-- Empty allowed_paths = all paths permitted. excluded_paths always win. -->
-      <allowed_paths></allowed_paths>
-      <excluded_paths>/admin,/logout,/billing</excluded_paths>
-      <excluded_hosts></excluded_hosts>
-
-      <max_requests_per_second>2.0</max_requests_per_second>
-      <max_concurrency>4</max_concurrency>
-
-      <!-- Capabilities: unlisted or false = denied. Active/intrusive ones are
-           off by default; enable only with explicit authorization. -->
       <permissions>
         <recon>true</recon>
         <tls_inspection>true</tls_inspection>
-        <http_analysis>true</http_analysis>
-        <header_analysis>true</header_analysis>
-        <subdomain_takeover>true</subdomain_takeover>
-        <llm_planning>true</llm_planning>
-        <port_scan>false</port_scan>
-        <active_web_testing>false</active_web_testing>
-        <api_testing>false</api_testing>
       </permissions>
     </target>
-
-    <!-- Add more targets by copying the block above with a new id and urls.
-    <target id="second-target">
-      <urls>
-        <url>https://staging.yoursite.com</url>
-      </urls>
-      <permissions><recon>true</recon></permissions>
-    </target>
-    -->
-
   </targets>
+  -->
 
 </artex_pentest>

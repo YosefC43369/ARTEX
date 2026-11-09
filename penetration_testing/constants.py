@@ -54,12 +54,11 @@ class TaskState(StrEnum):
 
 
 # Bridge capability NAMES that require explicit human approval before execution
-# (human-in-the-loop). Port scanning is the active, higher-impact capability
-# currently wired; additional active capabilities are added here as adapters
-# for them are introduced.
-DEFAULT_APPROVAL_CAPABILITIES = {
-    "scan.ports",
-}
+# (human-in-the-loop). Empty by default: ARTEX is an authorized red-team tool
+# and config.xml is the authorization, so capabilities run without per-task
+# friction. Operators who want a HITL gate can pass a non-empty set to
+# ApprovalManager (e.g. {"attack.web_vuln"}).
+DEFAULT_APPROVAL_CAPABILITIES: set = set()
 
 
 class Phase(StrEnum):
@@ -116,6 +115,11 @@ class VulnCategory(StrEnum):
     SUBDOMAIN_TAKEOVER = "subdomain_takeover"
     TLS_WEAKNESS = "tls_weakness"
     MISSING_HEADERS = "missing_security_headers"
+    SSTI = "server_side_template_injection"
+    XXE = "xml_external_entity"
+    CORS = "cors_misconfiguration"
+    JWT = "jwt_weakness"
+    OPEN_REDIRECT = "open_redirect"
 
 
 class EvidenceKind(StrEnum):

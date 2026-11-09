@@ -68,7 +68,20 @@ class Target:
     max_concurrency: int = 4
 
     def has_permission(self, capability: str) -> bool:
-        """Permissions fail closed: an unlisted capability is denied."""
+        """Authorization model for an offensive red-team engagement.
+
+        A target in config.xml *is* the authorization. When no explicit
+        ``permissions`` block is given, every capability (including active
+        offensive ones) is granted — the operator put the URL in scope on
+        purpose. When a ``permissions`` block IS given, it acts as an opt-in
+        restriction and unlisted capabilities are denied.
+
+        Scope is still fully enforced elsewhere (authorized domain confinement,
+        public-IP-only resolution, rate limiting); this only governs which
+        *capabilities* run, not which *targets* they may touch.
+        """
+        if not self.permissions:
+            return True
         return bool(self.permissions.get(capability, False))
 
     def to_dict(self) -> Dict[str, Any]:
