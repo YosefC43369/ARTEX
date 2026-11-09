@@ -1,0 +1,15 @@
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments / secrets
+.env
+.venv/
+venv/
+env/
+
+# Tooling / OS
+.pytest_cache/
+*.egg-info/
+.DS_Store
