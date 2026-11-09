@@ -1481,6 +1481,41 @@ def get_capabilities():
         ]
     })
 
+@app.route('/api/osint/graph/<scan_id>')
+def osint_graph(scan_id):
+    """Unify an already-collected scan's OSINT correlation into a
+    provenance-tagged entity graph. Read-only: no new network collection —
+    it only re-shapes data the scan already gathered.
+
+    Query params:
+        format=graph|summary  (default graph: nodes/edges for the UI)
+        redact=1|0            (default 1: redact email values)
+    """
+    if scan_id not in scan_results:
+        return jsonify({'error': 'Not found'}), 404
+    record = scan_results[scan_id]
+    profile = record.get('osint_correlation')
+    if not profile or not isinstance(profile, dict):
+        return jsonify({'error': 'No OSINT correlation data for this scan'}), 404
+
+    from penetration_testing.intelligence.osint import OsintIntelligenceEngine
+
+    class _PreCollected:
+        """Feeds stored correlation to the engine without any network I/O."""
+        def correlate(self, domain, scan_results=None, deep=False):
+            return profile
+
+    engine = OsintIntelligenceEngine(correlator=_PreCollected())
+    try:
+        graph = engine.investigate(record.get('domain', ''))
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    redact = request.args.get('redact', '1') != '0'
+    if request.args.get('format') == 'summary':
+        return jsonify(graph.to_summary(redact=redact))
+    return jsonify(graph.to_graph_dict(redact=redact))
+
 # ── Penetration-testing subsystem routes ─────────────────────────────────────
 def _pentest_guard():
     if pentest_agent is None:
