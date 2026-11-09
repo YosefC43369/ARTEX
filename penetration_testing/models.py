@@ -156,6 +156,9 @@ class Finding:
     potential_impact: str = ""
     remediation: str = ""
     references: List[str] = field(default_factory=list)
+    cwe: str = ""                                # e.g. "CWE-89"
+    mitre: List[str] = field(default_factory=list)   # ATT&CK technique ids
+    fp_reason: str = ""                          # why demoted/dropped, if any
     cvss_score: float = 0.0
     finding_id: str = field(default_factory=lambda: _new_id("find"))
     created_at: float = field(default_factory=_now)

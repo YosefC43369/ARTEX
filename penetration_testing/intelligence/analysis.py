@@ -39,6 +39,9 @@ from ..constants import (
 )
 from ..evidence.evidence_store import EvidenceStore
 from ..models import EngagementSession, Finding, Target, Task
+from .signatures import SignatureLibrary
+from .validation import FindingValidator
+from .modern_detectors import ModernDetectors
 
 
 _PORT_RISK_TO_SEVERITY = {
@@ -76,6 +79,9 @@ class AnalysisEngine:
     def __init__(self, evidence: EvidenceStore, logger: Optional[logging.Logger] = None):
         self.evidence = evidence
         self.logger = logger or logging.getLogger(__name__)
+        self.signatures = SignatureLibrary()
+        self.validator = FindingValidator(evidence, self.signatures, self.logger)
+        self.modern = ModernDetectors(evidence, self.signatures, self.logger)
 
     # ── per-task entry point ────────────────────────────────────────────────
     def analyze_task(
@@ -357,19 +363,27 @@ class AnalysisEngine:
         return target.url
 
     # ── session finalization: dedupe, FP filter, correlate ──────────────────
-    def finalize(self, session: EngagementSession) -> Dict[str, Any]:
+    def finalize(self, session: EngagementSession,
+                 target: Optional[Target] = None) -> Dict[str, Any]:
+        # 1. modern-class detection across the whole engagement's collected data
+        if target is not None:
+            session.findings.extend(self.modern.run(session, target))
+
+        # 2. de-duplicate
         seen = set()
         deduped: List[Finding] = []
         for f in session.findings:
             key = (str(f.category), f.endpoint, f.title)
             if key in seen:
                 continue
-            if not f.is_consistent():      # false-positive safety net
-                f.validation_status = ValidationStatus.INCONCLUSIVE
             seen.add(key)
             deduped.append(f)
+
+        # 3. validate: reduce false positives, promote corroborated findings,
+        #    and stamp CWE / MITRE ATT&CK for accurate reporting
+        kept, vstats = self.validator.validate_findings(deduped)
         session.findings = sorted(
-            deduped, key=lambda x: (x.severity.rank, x.cvss_score), reverse=True)
+            kept, key=lambda x: (x.severity.rank, x.cvss_score), reverse=True)
 
         correlations = self._correlate(session.findings)
         return {
@@ -378,6 +392,8 @@ class AnalysisEngine:
                              if f.validation_status == ValidationStatus.CONFIRMED),
             "potential": sum(1 for f in session.findings
                              if f.validation_status == ValidationStatus.POTENTIAL),
+            "false_positives_removed": vstats["false_positives_removed"],
+            "promoted_to_confirmed": vstats["promoted_to_confirmed"],
             "correlations": correlations,
         }
 

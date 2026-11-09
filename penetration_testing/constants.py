@@ -120,6 +120,12 @@ class VulnCategory(StrEnum):
     CORS = "cors_misconfiguration"
     JWT = "jwt_weakness"
     OPEN_REDIRECT = "open_redirect"
+    # modern classes
+    GRAPHQL = "graphql_exposure"
+    PROTOTYPE_POLLUTION = "prototype_pollution"
+    MASS_ASSIGNMENT = "mass_assignment"
+    OAUTH_SAML = "oauth_saml_misconfig"
+    REQUEST_SMUGGLING = "http_request_smuggling"
 
 
 class EvidenceKind(StrEnum):

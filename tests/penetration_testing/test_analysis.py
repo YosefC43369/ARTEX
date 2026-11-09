@@ -94,6 +94,20 @@ def test_active_extractor_handles_list_and_empty(evidence, target):
     assert eng.analyze_task(EngagementSession(target_id="t1"), t2, target) == []
 
 
+def test_finalize_runs_modern_detection_and_validation(evidence, target):
+    eng = AnalysisEngine(evidence)
+    session = EngagementSession(target_id="t1")
+    session.tasks.append(_task("attack.web_vuln",
+                               {"web_vuln": {"body": '{"__schema":{"queryType":{}}}'}}))
+    summary = eng.finalize(session, target)
+    assert "false_positives_removed" in summary
+    assert "promoted_to_confirmed" in summary
+    assert any(f.category == VulnCategory.GRAPHQL for f in session.findings)
+    # every surviving finding is CWE-stamped where a mapping exists
+    gql = [f for f in session.findings if f.category == VulnCategory.GRAPHQL][0]
+    assert gql.cwe
+
+
 def test_finalize_dedupes_and_sorts(evidence, target):
     eng = AnalysisEngine(evidence)
     session = EngagementSession(target_id="t1")

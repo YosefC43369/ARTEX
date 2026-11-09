@@ -137,7 +137,9 @@ class Reporter:
         return [
             f"### [{f.severity.value.upper()}] {f.title}",
             "",
-            f"- **Category:** {f.category.value}",
+            f"- **Category:** {f.category.value}"
+            + (f" · **{f.cwe}**" if f.cwe else "")
+            + (f" · ATT&CK {', '.join(f.mitre)}" if f.mitre else ""),
             f"- **Status:** {f.validation_status.value} "
             f"(confidence: {f.confidence.value})",
             f"- **Endpoint:** `{f.endpoint}`",

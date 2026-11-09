@@ -222,8 +222,8 @@ class Orchestrator:
         self, session: EngagementSession, target: Target, cancelled: bool = False,
     ) -> EngagementSession:
         # pull evidence collected by bridge/analysis into the session view
-        session.evidence = self.evidence.all()
-        summary = self.analysis.finalize(session)
+        summary = self.analysis.finalize(session, target)
+        session.evidence = self.evidence.all()   # after modern detection records
         session.metadata["analysis_summary"] = summary
         session.metadata["evidence_chain"] = self.evidence.verify_chain()
         session.metadata["evidence_stats"] = self.evidence.stats()
