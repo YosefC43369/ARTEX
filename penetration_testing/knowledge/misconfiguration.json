@@ -1,0 +1,12 @@
+{
+  "id": "kb-misconfiguration",
+  "category": "security_misconfiguration",
+  "title": "Security Misconfiguration / Exposed Service",
+  "summary": "An unnecessary service, port or default configuration is exposed, enlarging the attack surface.",
+  "detection": "Identify reachable services on non-essential ports, default credentials, verbose errors, directory listings and admin panels exposed to untrusted networks.",
+  "remediation": "Apply least-exposure: restrict services via firewall/segmentation, disable defaults, remove unused components, and patch to current versions.",
+  "references": [
+    "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/"
+  ],
+  "keywords": ["misconfiguration", "port", "exposed", "service", "default", "admin"]
+}

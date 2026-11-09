@@ -53,6 +53,9 @@ class Orchestrator:
         evidence: EvidenceStore,
         llm: OpenRouterClient,
         logger: Optional[logging.Logger] = None,
+        role=None,
+        approval=None,
+        knowledge=None,
     ):
         self.settings = settings
         self.scope = scope
@@ -63,6 +66,9 @@ class Orchestrator:
         self.evidence = evidence
         self.llm = llm
         self.logger = logger or logging.getLogger(__name__)
+        self.role = role                 # optional roles.Role
+        self.approval = approval         # optional security.approval.ApprovalManager
+        self.knowledge = knowledge       # optional intelligence.KnowledgeBase
         self.session: Optional[EngagementSession] = None
 
     # ── lifecycle ────────────────────────────────────────────────────────────
@@ -76,6 +82,15 @@ class Orchestrator:
         for spec in self.bridge.list_capabilities(available_only=True):
             if target.has_permission(spec.permission):
                 caps.append(spec.name)
+        if self.role is not None:
+            # role narrows/orders — never widens — the permitted capabilities
+            permitted = set(caps)
+            ordered = [c for c in self.role.capabilities if c in permitted]
+            ordered += [c for c in caps if c not in ordered]
+            caps = ordered
+        else:
+            from .intelligence.planner import apply_default_order
+            caps = apply_default_order(caps)
         return caps
 
     # ── main entry point ─────────────────────────────────────────────────────
@@ -163,12 +178,26 @@ class Orchestrator:
 
             task = pending[0]
             iterations += 1
+
+            # human-in-the-loop gate: hold high-impact capabilities for approval
+            if (self.approval is not None
+                    and self.approval.requires_approval(task.capability)
+                    and not self.approval.is_approved(session.session_id, task.capability)):
+                self.approval.request(session.session_id, target.identifier, task.capability)
+                task.state = TaskState.AWAITING_APPROVAL
+                session.add_log("warning",
+                                f"{task.capability} held — awaiting human approval",
+                                task_id=task.task_id)
+                continue
+
             session.add_log("info", f"Executing {task.capability}",
                             task_id=task.task_id, iteration=iterations)
 
             result = self.executor.execute(task, target)
             if result.ok:
                 findings = self.analysis.analyze_task(session, task, target)
+                if self.knowledge is not None:
+                    findings = [self.knowledge.enrich(f) for f in findings]
                 session.findings.extend(findings)
                 if findings:
                     session.add_log("info",
@@ -206,6 +235,33 @@ class Orchestrator:
             session.finished_at = time.time()
         session.add_log("info", f"Engagement {session.state}", **session.counts())
         return session
+
+    # ── resume after human approval ──────────────────────────────────────────
+    def resume(self) -> EngagementSession:
+        """Re-run capabilities that were held for approval and are now approved."""
+        session = self.session
+        if session is None:
+            raise PenTestError("No session to resume.")
+        target = self.scope.authorize_target(session.target_id)
+
+        promoted = 0
+        for t in session.tasks:
+            if t.state == TaskState.AWAITING_APPROVAL and (
+                self.approval is None
+                or self.approval.is_approved(session.session_id, t.capability)
+            ):
+                t.state = TaskState.PENDING
+                promoted += 1
+
+        if not promoted:
+            session.add_log("info", "Resume: no newly-approved tasks to run.")
+            return session
+
+        session.add_log("info", f"Resume: {promoted} approved task(s) queued")
+        session.state = SessionState.RUNNING
+        caps = self._permitted_capabilities(target)
+        self._execution_loop(session, target, caps)
+        return self._finalize(session, target)
 
     # ── reporting convenience ────────────────────────────────────────────────
     def build_reports(self, formats: Optional[List[str]] = None) -> Dict[str, str]:

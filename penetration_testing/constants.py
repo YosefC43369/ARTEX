@@ -49,7 +49,17 @@ class TaskState(StrEnum):
     FAILED = "failed"
     SKIPPED = "skipped"
     DENIED = "denied"          # blocked by scope / permission policy
+    AWAITING_APPROVAL = "awaiting_approval"   # held for human-in-the-loop
     CANCELLED = "cancelled"
+
+
+# Bridge capability NAMES that require explicit human approval before execution
+# (human-in-the-loop). Port scanning is the active, higher-impact capability
+# currently wired; additional active capabilities are added here as adapters
+# for them are introduced.
+DEFAULT_APPROVAL_CAPABILITIES = {
+    "scan.ports",
+}
 
 
 class Phase(StrEnum):

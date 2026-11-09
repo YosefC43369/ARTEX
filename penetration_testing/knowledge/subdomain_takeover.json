@@ -1,0 +1,13 @@
+{
+  "id": "kb-subdomain-takeover",
+  "category": "subdomain_takeover",
+  "title": "Subdomain Takeover",
+  "summary": "A DNS record points to a de-provisioned third-party resource that an attacker can claim, serving content on a trusted subdomain.",
+  "detection": "Find CNAME/ALIAS records pointing to external services (S3, GitHub Pages, Heroku, Azure, etc.) that return provider 'not found' fingerprints. Confirm manually before claiming exploitability.",
+  "remediation": "Remove dangling DNS records or reclaim the backing resource. Audit DNS when decommissioning services; monitor for provider fingerprints.",
+  "references": [
+    "https://owasp.org/www-community/attacks/Subdomain_takeover",
+    "https://github.com/EdOverflow/can-i-take-over-xyz"
+  ],
+  "keywords": ["subdomain", "takeover", "cname", "dangling", "dns", "s3", "github pages"]
+}

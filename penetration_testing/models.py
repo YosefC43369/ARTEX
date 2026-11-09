@@ -142,6 +142,7 @@ class Finding:
     demonstrated_impact: str = ""
     potential_impact: str = ""
     remediation: str = ""
+    references: List[str] = field(default_factory=list)
     cvss_score: float = 0.0
     finding_id: str = field(default_factory=lambda: _new_id("find"))
     created_at: float = field(default_factory=_now)

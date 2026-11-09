@@ -1,0 +1,12 @@
+{
+  "id": "kb-info-exposure",
+  "category": "information_exposure",
+  "title": "Information Exposure",
+  "summary": "The target discloses internal details (hosts, stack, paths, versions) that aid an attacker's targeting.",
+  "detection": "Review enumerated subdomains, verbose banners/headers, source maps, error messages and metadata for sensitive disclosure.",
+  "remediation": "Minimize disclosed metadata, remove debug/verbose output in production, and review which subdomains/services are internet-facing.",
+  "references": [
+    "https://owasp.org/Top10/A01_2021-Broken_Access_Control/"
+  ],
+  "keywords": ["information", "disclosure", "exposure", "subdomain", "banner", "version"]
+}

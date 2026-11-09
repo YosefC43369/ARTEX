@@ -1,0 +1,13 @@
+{
+  "id": "kb-missing-headers",
+  "category": "missing_security_headers",
+  "title": "Missing Security Headers",
+  "summary": "Responses omit headers that provide defense-in-depth against XSS, clickjacking, MIME sniffing and transport downgrade.",
+  "detection": "Inspect HTTP response headers for Content-Security-Policy, Strict-Transport-Security, X-Frame-Options, X-Content-Type-Options, Referrer-Policy and Permissions-Policy.",
+  "remediation": "Add Content-Security-Policy, Strict-Transport-Security (with preload), X-Content-Type-Options: nosniff, X-Frame-Options: DENY (or CSP frame-ancestors), and a restrictive Referrer-Policy and Permissions-Policy.",
+  "references": [
+    "https://owasp.org/www-project-secure-headers/",
+    "https://developer.mozilla.org/docs/Web/HTTP/Headers/Content-Security-Policy"
+  ],
+  "keywords": ["header", "csp", "hsts", "clickjacking", "x-frame-options", "nosniff"]
+}

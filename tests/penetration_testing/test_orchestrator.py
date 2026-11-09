@@ -32,13 +32,14 @@ class FakeBridge:
         return ToolResult(ok=True, capability=name, data=self.DATA.get(name, {}))
 
 
-def _orchestrator(settings, bridge):
+def _orchestrator(settings, bridge, approval=None, role=None):
     scope = ScopeManager(settings)
     evidence = EvidenceStore(enabled=True)
     llm = OpenRouterClient("")
     return Orchestrator(
         settings, scope, bridge, Planner(llm), Executor(bridge),
         AnalysisEngine(evidence), evidence, llm,
+        approval=approval, role=role,
     )
 
 
@@ -82,3 +83,31 @@ def test_bounded_by_cancellation(settings):
     orch.cancel()
     session = orch.run("t1")
     assert session.state in (SessionState.CANCELLED, SessionState.COMPLETED)
+
+
+def test_role_reorders_plan(settings):
+    from penetration_testing.roles import RoleManager
+    # web-app-tester prefers tls.inspect over subdomains (opposite of default)
+    role = RoleManager().get("web-app-tester")
+    orch = _orchestrator(settings, FakeBridge(), role=role)
+    session = orch.run("t1")
+    caps = [t.capability for t in session.tasks]
+    assert caps[0] == "tls.inspect"
+
+
+def test_approval_holds_then_resume_runs(settings):
+    from penetration_testing.constants import TaskState
+    from penetration_testing.security.approval import ApprovalManager
+    appr = ApprovalManager(required={"tls.inspect"})
+    orch = _orchestrator(settings, FakeBridge(), approval=appr)
+    session = orch.run("t1")
+
+    held = [t for t in session.tasks if t.capability == "tls.inspect"]
+    assert held and held[0].state == TaskState.AWAITING_APPROVAL
+    pending = appr.pending(session.session_id)
+    assert pending
+
+    appr.decide(pending[0].approval_id, True)
+    orch.resume()
+    held = [t for t in session.tasks if t.capability == "tls.inspect"]
+    assert held[0].state == TaskState.COMPLETED

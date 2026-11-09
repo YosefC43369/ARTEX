@@ -41,6 +41,13 @@ _DEFAULT_ORDER = [
     "scan.ports",
 ]
 
+def apply_default_order(capabilities: List[str]) -> List[str]:
+    """Order capabilities by the phase-sensible default, keeping extras last."""
+    ordered = [c for c in _DEFAULT_ORDER if c in capabilities]
+    ordered += [c for c in capabilities if c not in ordered]
+    return ordered
+
+
 _PHASE_BY_CAP = {
     "recon.subdomains": Phase.RECON,
     "recon.dns": Phase.RECON,
@@ -61,9 +68,9 @@ class Planner:
     def build_plan(
         self, target: Target, capabilities: List[str], max_tasks: int,
     ) -> List[Task]:
-        ordered = [c for c in _DEFAULT_ORDER if c in capabilities]
-        # include any capability not in the default order, appended stably
-        ordered += [c for c in capabilities if c not in ordered]
+        # Preserve the caller's order (the orchestrator has already applied the
+        # role ordering, or the default order when no role is set).
+        ordered = list(capabilities)
 
         if self.llm.available:
             llm_order = self._llm_prioritize(target, ordered)

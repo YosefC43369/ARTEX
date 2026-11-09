@@ -1526,7 +1526,8 @@ def pentest_start():
     target_id = (data.get('target_id') or '').strip()
     if not target_id:
         return jsonify({'error': 'target_id is required'}), 400
-    result = pentest_agent.start_engagement(target_id, background=True)
+    role = (data.get('role') or None)
+    result = pentest_agent.start_engagement(target_id, role=role, background=True)
     return jsonify(result), (404 if 'error' in result else 202)
 
 
@@ -1572,6 +1573,88 @@ def pentest_cancel(session_id):
     if guard:
         return guard
     return jsonify(pentest_agent.cancel(session_id))
+
+
+# ── ported features (roles / HITL approvals / assets / vulns / knowledge) ────
+@app.route('/pentest/roles')
+def pentest_roles():
+    guard = _pentest_guard()
+    if guard:
+        return guard
+    return jsonify({'roles': pentest_agent.list_roles()})
+
+
+@app.route('/pentest/approvals')
+def pentest_approvals():
+    guard = _pentest_guard()
+    if guard:
+        return guard
+    sid = request.args.get('session_id')
+    return jsonify({'pending': pentest_agent.list_pending_approvals(sid)})
+
+
+@app.route('/pentest/approve/<approval_id>', methods=['POST'])
+def pentest_approve(approval_id):
+    guard = _pentest_guard()
+    if guard:
+        return guard
+    data = request.get_json(silent=True) or {}
+    approve = bool(data.get('approve', True))
+    res = pentest_agent.decide_approval(approval_id, approve)
+    return jsonify(res), (404 if 'error' in res else 200)
+
+
+@app.route('/pentest/resume/<session_id>', methods=['POST'])
+def pentest_resume(session_id):
+    guard = _pentest_guard()
+    if guard:
+        return guard
+    res = pentest_agent.resume_engagement(session_id)
+    return jsonify(res), (404 if 'error' in res else 202)
+
+
+@app.route('/pentest/assets')
+def pentest_assets():
+    guard = _pentest_guard()
+    if guard:
+        return guard
+    return jsonify(pentest_agent.list_assets(request.args.get('kind')))
+
+
+@app.route('/pentest/vulnerabilities')
+def pentest_vulnerabilities():
+    guard = _pentest_guard()
+    if guard:
+        return guard
+    return jsonify(pentest_agent.list_vulnerabilities(
+        state=request.args.get('state'),
+        severity=request.args.get('severity'),
+        category=request.args.get('category')))
+
+
+@app.route('/pentest/vulnerabilities/state', methods=['POST'])
+def pentest_vuln_state():
+    guard = _pentest_guard()
+    if guard:
+        return guard
+    data = request.get_json(silent=True) or {}
+    sig = data.get('signature')
+    state = data.get('state')
+    if not sig or not state:
+        return jsonify({'error': 'signature and state are required'}), 400
+    res = pentest_agent.set_vulnerability_state(sig, state, data.get('note'))
+    return jsonify(res), (400 if 'error' in res else 200)
+
+
+@app.route('/pentest/knowledge')
+def pentest_knowledge():
+    guard = _pentest_guard()
+    if guard:
+        return guard
+    q = request.args.get('q')
+    if q:
+        return jsonify(pentest_agent.knowledge_search(q))
+    return jsonify(pentest_agent.knowledge_list())
 
 
 if __name__ == '__main__':
