@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}First-Run Setup{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/hack-font/3.3.0/web/hack.css">
+<style>
+  .auth-wrap{ max-width:460px; margin:3rem auto; font-family:'Hack','JetBrains Mono',monospace; }
+  .auth-card{ background:#0d0e12; border:1px solid #2a0e12; border-radius:12px; padding:2rem;
+    box-shadow:0 0 0 1px rgba(225,29,72,.1), 0 20px 60px -20px rgba(225,29,72,.3); }
+  .auth-card h1{ color:#e7e9ea; font-size:1.3rem; letter-spacing:.08em; margin-bottom:.3rem; }
+  .auth-card h1 span{ color:#ff2d55; }
+  .auth-sub{ color:#8b949e; font-size:.78rem; margin-bottom:1.4rem; }
+  .auth-note{ background:rgba(48,209,88,.08); border:1px solid #166534; color:#86efac;
+    padding:.55rem .8rem; border-radius:8px; font-size:.76rem; margin-bottom:1.2rem; }
+  .auth-card label{ display:block; color:#93c5fd; font-size:.7rem; text-transform:uppercase;
+    letter-spacing:.08em; margin:.8rem 0 .3rem; }
+  .auth-card input{ width:100%; background:#060708; border:1px solid #2a0e12; color:#e7e9ea;
+    padding:.65rem .8rem; border-radius:8px; font-family:inherit; font-size:.85rem; outline:none; }
+  .auth-card input:focus{ border-color:#e11d48; box-shadow:0 0 0 3px rgba(225,29,72,.15); }
+  .auth-btn{ width:100%; margin-top:1.4rem; background:linear-gradient(90deg,#9f1239,#e11d48);
+    color:#fff; border:1px solid #ff2d55; padding:.7rem; border-radius:8px; font-family:inherit;
+    font-weight:700; letter-spacing:.1em; cursor:pointer; }
+  .auth-btn:hover{ box-shadow:0 0 16px rgba(225,29,72,.6); }
+  .auth-err{ background:rgba(225,29,72,.12); border:1px solid #7f1d1d; color:#fca5a5;
+    padding:.5rem .8rem; border-radius:8px; font-size:.8rem; margin-bottom:1rem; }
+  .auth-dev{ text-align:center; color:#e11d48; font-size:.72rem; letter-spacing:.14em; margin-top:1.2rem; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <div class="auth-card">
+    <h1>ARTEX // <span>INITIAL SETUP</span></h1>
+    <div class="auth-sub">Create the administrator account.</div>
+    <div class="auth-note">This runs only once. The first account created is the
+      sole administrator — only this account can create further accounts and keys.</div>
+    {% if error %}<div class="auth-err">{{ error }}</div>{% endif %}
+    <form method="post" action="/setup" autocomplete="off">
+      <label>Admin username (min 3 chars)</label>
+      <input type="text" name="username" required autofocus>
+      <label>Password (min 8 chars)</label>
+      <input type="password" name="password" required>
+      <button class="auth-btn" type="submit">▶ CREATE ADMIN</button>
+    </form>
+  </div>
+  <div class="auth-dev">Developer: YOSCRYPT</div>
+</div>
+{% endblock %}

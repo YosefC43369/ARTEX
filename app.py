@@ -1,4 +1,5 @@
-from flask import Flask, render_template, request, jsonify, session, abort
+from flask import Flask, render_template, request, jsonify, session, abort, redirect
+from functools import wraps
 import uuid
 import threading
 import time
@@ -77,7 +78,155 @@ import threading
 import os
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+
+# ── Authentication & access control ──────────────────────────────────────────
+# Accounts (admin-created) + an admin-only API-key system that gates the AI
+# Agent panel. The session secret is now STABLE (persisted), so logins survive
+# restarts.
+from auth import AuthStore, PasswordPolicyError
+auth_store = AuthStore()
+app.secret_key = auth_store.secret_key()
+
+# Paths reachable without a login.
+_PUBLIC_PATHS = {'/login', '/setup', '/logout', '/health'}
+
+
+def _wants_json():
+    accept = request.headers.get('Accept', '')
+    return not (request.method == 'GET' and 'text/html' in accept)
+
+
+def _current_user():
+    return session.get('user')
+
+
+def _is_admin():
+    u = session.get('user')
+    return bool(u and u.get('role') == 'admin')
+
+
+def admin_required(fn):
+    @wraps(fn)
+    def _wrap(*a, **k):
+        if not _is_admin():
+            return jsonify({'error': 'admin privilege required'}), 403
+        return fn(*a, **k)
+    return _wrap
+
+
+@app.before_request
+def _auth_gate():
+    p = request.path
+    if p.startswith('/static') or p in _PUBLIC_PATHS:
+        return None
+    # First-run bootstrap: force admin creation when no users exist yet.
+    if not auth_store.has_users():
+        return None if p == '/setup' else redirect('/setup')
+    # Require a logged-in session for everything else.
+    if not _current_user():
+        if _wants_json():
+            return jsonify({'error': 'authentication required'}), 401
+        return redirect('/login')
+    # AI Agent panel: the /pentest/* API additionally requires a valid key.
+    if p.startswith('/pentest/') and p != '/pentest/unlock':
+        if not session.get('ai_key_valid'):
+            return jsonify({'error': 'AI Agent key required', 'locked': True}), 403
+    return None
+
+
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    if auth_store.has_users():
+        return redirect('/login')   # bootstrap only once
+    if request.method == 'GET':
+        return render_template('setup.html')
+    username = request.form.get('username', '')
+    password = request.form.get('password', '')
+    try:
+        user = auth_store.create_user(username, password)  # first user => admin
+    except PasswordPolicyError as exc:
+        return render_template('setup.html', error=str(exc)), 400
+    session['user'] = user
+    return redirect('/admin')
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'GET':
+        if not auth_store.has_users():
+            return redirect('/setup')
+        return render_template('login.html')
+    user = auth_store.verify_user(request.form.get('username', ''),
+                                  request.form.get('password', ''))
+    if not user:
+        return render_template('login.html', error='Invalid credentials'), 401
+    session.clear()
+    session['user'] = user
+    return redirect('/')
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect('/login')
+
+
+# ── admin: account + key management (admin-only) ─────────────────────────────
+@app.route('/admin')
+def admin_dashboard():
+    if not _is_admin():
+        return redirect('/login')
+    return render_template('admin.html', user=session.get('user'))
+
+
+@app.route('/admin/accounts', methods=['GET', 'POST'])
+@admin_required
+def admin_accounts():
+    if request.method == 'GET':
+        return jsonify({'users': auth_store.list_users()})
+    data = request.get_json(silent=True) or request.form
+    try:
+        created = auth_store.create_user(
+            data.get('username', ''), data.get('password', ''),
+            role=(data.get('role') or 'user'),
+            created_by=session['user']['username'])
+    except PasswordPolicyError as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify({'created': created}), 201
+
+
+@app.route('/admin/keys', methods=['GET', 'POST'])
+@admin_required
+def admin_keys():
+    if request.method == 'GET':
+        # Admin-only: includes plaintext key values.
+        return jsonify({'keys': auth_store.list_keys(include_value=True)})
+    data = request.get_json(silent=True) or request.form
+    key = auth_store.create_key(
+        label=data.get('label', ''),
+        valid_days=int(data.get('valid_days', 30) or 30),
+        lifetime=str(data.get('lifetime', '')).lower() in ('1', 'true', 'on', 'yes'),
+        single_use=str(data.get('single_use', '')).lower() in ('1', 'true', 'on', 'yes'),
+        created_by=session['user']['username'])
+    return jsonify({'key': key}), 201   # plaintext value returned once here
+
+
+@app.route('/admin/keys/<key_id>/revoke', methods=['POST'])
+@admin_required
+def admin_revoke_key(key_id):
+    return jsonify({'revoked': auth_store.revoke_key(key_id)})
+
+
+@app.route('/pentest/unlock', methods=['POST'])
+def pentest_unlock():
+    data = request.get_json(silent=True) or request.form
+    ok, reason = auth_store.verify_key(data.get('key', ''))
+    if ok:
+        session['ai_key_valid'] = True
+        session['ai_key_id'] = reason
+        return jsonify({'ok': True})
+    return jsonify({'ok': False, 'reason': reason}), 403
+
 
 @app.template_filter('datetimeformat')
 def datetimeformat(value, format='%Y-%m-%d %H:%M:%S'):
