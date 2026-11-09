@@ -435,7 +435,7 @@ result = subprocess.run(f"ping -c 1 {user_input}", shell=True)
 # FIXED — argument array, shell=False, no interpolation
 import subprocess, shlex
 # Validate first
-if not re.match(r'^[a-zA-Z0-9.\-]{1,253}$', user_input):
+if not re.match(r'^[a-zA-Z0-9.\\-]{1,253}$', user_input):
     raise ValueError("Invalid hostname")
 result = subprocess.run(
     ["ping", "-c", "1", user_input],

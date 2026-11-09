@@ -945,7 +945,7 @@ fetch('{target_url}', {{credentials:'include'}})
 <pre id="cors_out">Waiting...</pre>
 <!-- Sandboxed iframe sends Origin: null per spec -->
 <iframe id="f" sandbox="allow-scripts allow-top-navigation-by-user-activation"
-  srcdoc="<script>eval(atob('{encoded}'))<\/script>"
+  srcdoc="<script>eval(atob('{encoded}'))<\\/script>"
   style="display:none"></iframe>
 </body>
 </html>"""
