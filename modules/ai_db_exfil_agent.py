@@ -29,8 +29,8 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-_GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
-_GROQ_MODEL = "llama3-70b-8192"
+_OPENROUTER_URL   = "https://openrouter.ai/api/v1/chat/completions"
+_OPENROUTER_MODEL = "meta-llama/llama-3-70b-instruct"
 
 # Maximum agent iterations before forcing a report
 _MAX_ITERATIONS = 12
@@ -781,10 +781,10 @@ def _build_tool_registry(session: requests.Session, base_url: str) -> Dict[str, 
 
 
 # ---------------------------------------------------------------------------
-# Groq LLM client
+# OpenRouter LLM client
 # ---------------------------------------------------------------------------
 
-def _call_groq(
+def _call_openrouter(
     api_key: str,
     messages: List[Dict[str, str]],
     max_tokens: int = 2000,
@@ -795,14 +795,14 @@ def _call_groq(
         "Content-Type":  "application/json",
     }
     payload = {
-        "model":       _GROQ_MODEL,
+        "model":       _OPENROUTER_MODEL,
         "messages":    messages,
         "temperature": temperature,
         "max_tokens":  max_tokens,
     }
     for attempt in range(3):
         try:
-            resp = requests.post(_GROQ_URL, headers=headers, json=payload, timeout=50)
+            resp = requests.post(_OPENROUTER_URL, headers=headers, json=payload, timeout=50)
             if resp.status_code == 200:
                 return resp.json()["choices"][0]["message"]["content"]
             if resp.status_code == 429:
@@ -810,7 +810,7 @@ def _call_groq(
                 logger.warning(f"[ai_db_agent] rate limited — sleeping {wait}s")
                 time.sleep(wait)
                 continue
-            logger.error(f"[ai_db_agent] Groq {resp.status_code}: {resp.text[:200]}")
+            logger.error(f"[ai_db_agent] OpenRouter {resp.status_code}: {resp.text[:200]}")
             break
         except requests.exceptions.Timeout:
             if attempt < 2:
@@ -998,7 +998,7 @@ def _run_agent_loop(
             removed = context.pop(2)
             total_chars -= len(removed["content"])
 
-        raw_response = _call_groq(api_key, context, max_tokens=800, temperature=0.2)
+        raw_response = _call_openrouter(api_key, context, max_tokens=800, temperature=0.2)
         if not raw_response:
             break
 
@@ -1244,7 +1244,7 @@ def _synthesise_report(
         evidence=ev_summary,
     )
 
-    raw = _call_groq(
+    raw = _call_openrouter(
         api_key,
         [{"role": "user", "content": report_prompt}],
         max_tokens=3000,
@@ -1372,7 +1372,7 @@ class AIDBExfilAgent:
     Usage in app.py:
         agent = AIDBExfilAgent(
             target_url=f"https://{domain}",
-            groq_api_key=os.getenv('GROQ_API_KEY'),
+            openrouter_api_key=os.getenv('OPENROUTER_API_KEY'),
         )
         results = agent.scan()
         scan_results[scan_id]['ai_db_exfil'] = results
@@ -1381,12 +1381,12 @@ class AIDBExfilAgent:
     def __init__(
         self,
         target_url: str,
-        groq_api_key: Optional[str] = None,
+        openrouter_api_key: Optional[str] = None,
         proxy: Optional[str] = None,
         max_iterations: int = _MAX_ITERATIONS,
     ):
         self.target_url     = target_url.rstrip("/")
-        self.groq_api_key   = groq_api_key or os.getenv("GROQ_API_KEY", "")
+        self.openrouter_api_key   = openrouter_api_key or os.getenv("OPENROUTER_API_KEY", "")
         self.proxy          = proxy
         self.max_iterations = max_iterations
 
@@ -1394,9 +1394,9 @@ class AIDBExfilAgent:
         import urllib3
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-        if not self.groq_api_key:
+        if not self.openrouter_api_key:
             return {
-                "error":    "GROQ_API_KEY not set — AI agent requires Groq API access",
+                "error":    "OPENROUTER_API_KEY not set — AI agent requires OpenRouter API access",
                 "target":   self.target_url,
                 "risk_level": "UNKNOWN",
                 "risk_score": 0,
@@ -1406,7 +1406,7 @@ class AIDBExfilAgent:
         registry = _build_tool_registry(session, self.target_url)
 
         print(f"[ai_db_agent] target     : {self.target_url}")
-        print(f"[ai_db_agent] model      : {_GROQ_MODEL}")
+        print(f"[ai_db_agent] model      : {_OPENROUTER_MODEL}")
         print(f"[ai_db_agent] max_iters  : {self.max_iterations}")
         print(f"[ai_db_agent] tools      : {list(registry.keys())}")
 
@@ -1414,7 +1414,7 @@ class AIDBExfilAgent:
 
         # Run agentic loop
         iterations, evidence = _run_agent_loop(
-            self.groq_api_key, registry, self.target_url
+            self.openrouter_api_key, registry, self.target_url
         )
 
         # Heuristic scoring (fast, no LLM)
@@ -1423,7 +1423,7 @@ class AIDBExfilAgent:
 
         # LLM-synthesised final report
         report = _synthesise_report(
-            self.groq_api_key, self.target_url,
+            self.openrouter_api_key, self.target_url,
             iterations, evidence, h_score, h_findings,
         )
 

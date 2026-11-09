@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from core.batch_manager import TargetContext, BatchOperation
 
-GROQ_API_KEY_ENV = __import__("os").getenv("GROQ_API_KEY", "")
+OPENROUTER_API_KEY_ENV = __import__("os").getenv("OPENROUTER_API_KEY", "")
 
 # ── Hardcoded restriction list — never added to any command ──────────
 _FORBIDDEN_ARGS = {
@@ -53,12 +53,12 @@ class SQLMapIntegration:
         - AIAnalyst interpretation of results
 
     Usage (from AI_batch_orchestrator):
-        sqli = SQLMapIntegration(groq_api_key=GROQ_API_KEY)
+        sqli = SQLMapIntegration(openrouter_api_key=OPENROUTER_API_KEY)
         result = sqli.run_assessment(url, target_ctx, batch_op)
     """
 
-    def __init__(self, groq_api_key: str = GROQ_API_KEY_ENV):
-        self.groq_api_key = groq_api_key
+    def __init__(self, openrouter_api_key: str = OPENROUTER_API_KEY_ENV):
+        self.openrouter_api_key = openrouter_api_key
         self.logger       = logging.getLogger(__name__)
 
         if not self.logger.handlers:
@@ -306,8 +306,8 @@ class SQLMapIntegration:
         parameters: List[str],
         techniques: List[str],
     ) -> str:
-        """Send sqlmap output to Groq for analyst-grade summary."""
-        if not self.groq_api_key:
+        """Send sqlmap output to OpenRouter for analyst-grade summary."""
+        if not self.openrouter_api_key:
             if injectable:
                 return (
                     f"SQL injection confirmed on {url}. "
@@ -330,13 +330,13 @@ Focus on: what was found, severity, and immediate risk. No preamble."""
 
         try:
             resp = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
+                "https://openrouter.ai/api/v1/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {self.groq_api_key}",
+                    "Authorization": f"Bearer {self.openrouter_api_key}",
                     "Content-Type":  "application/json",
                 },
                 json={
-                    "model":       "llama3-70b-8192",
+                    "model":       "meta-llama/llama-3-70b-instruct",
                     "messages":    [{"role": "user", "content": prompt}],
                     "temperature": 0.2,
                     "max_tokens":  200,

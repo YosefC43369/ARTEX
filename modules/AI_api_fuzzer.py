@@ -29,7 +29,7 @@ from core.http_client import HTTPClient
 # Constants
 # ---------------------------------------------------------------------------
 
-GROQ_API_KEY = __import__("os").getenv("GROQ_API_KEY", "")
+OPENROUTER_API_KEY = __import__("os").getenv("OPENROUTER_API_KEY", "")
 
 # Request constraints — stay within safe bounds
 MAX_REQUESTS_PER_ENDPOINT = 80
@@ -849,10 +849,10 @@ class AIAPIFuzzer:
         6. Detects response anomalies (status, length, latency, error strings)
         7. Escalates confirmed anomalies with deeper payload sets
         8. Records every request as a signed evidence entry
-        9. Sends findings to Groq for analyst-grade summary
+        9. Sends findings to OpenRouter for analyst-grade summary
 
     Slot in run_scan() after payload_analysis:
-        fuzzer = AIAPIFuzzer(groq_api_key=GROQ_API_KEY)
+        fuzzer = AIAPIFuzzer(openrouter_api_key=OPENROUTER_API_KEY)
         scan_results[scan_id]['api_fuzz_results'] = fuzzer.fuzz(
             domain=domain,
             scan_results=scan_results[scan_id],
@@ -861,11 +861,11 @@ class AIAPIFuzzer:
 
     def __init__(
         self,
-        groq_api_key:  str = GROQ_API_KEY,
+        openrouter_api_key:  str = OPENROUTER_API_KEY,
         max_endpoints: int = MAX_ENDPOINTS,
         max_per_ep:    int = MAX_REQUESTS_PER_ENDPOINT,
     ):
-        self.groq_api_key  = groq_api_key
+        self.openrouter_api_key  = openrouter_api_key
         self.max_endpoints = max_endpoints
         self.max_per_ep    = max_per_ep
 
@@ -902,7 +902,7 @@ class AIAPIFuzzer:
             total_requests     — int
             endpoints_with_findings — int
             coverage_map       — {param_type: count}
-            ai_analysis        — Groq summary (or None)
+            ai_analysis        — OpenRouter summary (or None)
             scan_metadata
         """
         self.logger.info(f"API fuzzing starting — domain: {domain}")
@@ -947,7 +947,7 @@ class AIAPIFuzzer:
 
         # ── AI analysis ───────────────────────────────────────────────
         ai_result = None
-        if self.groq_api_key and all_findings:
+        if self.openrouter_api_key and all_findings:
             ai_result = self._ai_analysis(domain, ep_results, all_findings)
 
         duration = round(time.time() - start, 2)
@@ -967,7 +967,7 @@ class AIAPIFuzzer:
                 "domain":                domain,
                 "scan_duration_seconds": duration,
                 "timestamp":             datetime.now().isoformat(),
-                "ai_model":              "Groq Llama3-70B" if ai_result else "Rule-based only",
+                "ai_model":              "OpenRouter Llama3-70B" if ai_result else "Rule-based only",
                 "waf_detected":          waf.get("name") if waf.get("detected") else None,
                 "request_delay_s":       delay,
             },
@@ -1465,7 +1465,7 @@ class AIAPIFuzzer:
         return findings
 
     # ------------------------------------------------------------------
-    # Pass 2 — Groq AI analysis
+    # Pass 2 — OpenRouter AI analysis
     # ------------------------------------------------------------------
 
     def _ai_analysis(
@@ -1476,7 +1476,7 @@ class AIAPIFuzzer:
     ) -> Optional[Dict]:
         try:
             prompt = self._build_prompt(domain, ep_results, findings)
-            text   = self._call_groq(prompt)
+            text   = self._call_openrouter(prompt)
             if not text:
                 return None
             return self._parse_ai_response(text)
@@ -1543,22 +1543,22 @@ Return a JSON object with EXACTLY these keys:
 
 Return ONLY valid JSON. No markdown fences, no preamble."""
 
-    def _call_groq(self, prompt: str) -> Optional[str]:
+    def _call_openrouter(self, prompt: str) -> Optional[str]:
         headers = {
-            "Authorization": f"Bearer {self.groq_api_key}",
+            "Authorization": f"Bearer {self.openrouter_api_key}",
             "Content-Type":  "application/json",
         }
         payload = {
-            "model":       "llama3-70b-8192",
+            "model":       "meta-llama/llama-3-70b-instruct",
             "messages":    [{"role": "user", "content": prompt}],
             "temperature": 0.2,
             "max_tokens":  1800,
         }
         for attempt in range(3):
             try:
-                self.logger.info(f"Groq API call attempt {attempt + 1}")
+                self.logger.info(f"OpenRouter API call attempt {attempt + 1}")
                 resp = req_lib.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
+                    "https://openrouter.ai/api/v1/chat/completions",
                     headers = headers,
                     json    = payload,
                     timeout = 50,
@@ -1573,7 +1573,7 @@ Return ONLY valid JSON. No markdown fences, no preamble."""
                 if attempt < 2:
                     time.sleep(2 ** attempt)
             except Exception as e:
-                self.logger.error(f"Groq error: {e}")
+                self.logger.error(f"OpenRouter error: {e}")
                 break
         return None
 
@@ -1586,7 +1586,7 @@ Return ONLY valid JSON. No markdown fences, no preamble."""
         cleaned = cleaned.strip()
         try:
             parsed = json.loads(cleaned)
-            parsed["ai_model"]     = "Groq Llama3-70B"
+            parsed["ai_model"]     = "OpenRouter Llama3-70B"
             parsed["generated_at"] = datetime.now().isoformat()
             return parsed
         except json.JSONDecodeError:
@@ -1595,7 +1595,7 @@ Return ONLY valid JSON. No markdown fences, no preamble."""
             if start != -1 and end > start:
                 try:
                     parsed = json.loads(cleaned[start:end])
-                    parsed["ai_model"]     = "Groq Llama3-70B"
+                    parsed["ai_model"]     = "OpenRouter Llama3-70B"
                     parsed["generated_at"] = datetime.now().isoformat()
                     return parsed
                 except json.JSONDecodeError:

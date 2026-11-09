@@ -86,7 +86,7 @@ class AIOSINTCorrelator:
 
     Collects from up to 12 passive and semi-active sources,
     de-duplicates and cross-correlates findings, then feeds a
-    condensed profile to Groq for attack surface prioritisation.
+    condensed profile to OpenRouter for attack surface prioritisation.
 
     Sources (all gracefully degrade without keys):
       Free / no-key   — crt.sh, HackerTarget, AlienVault OTX, URLScan.io,
@@ -99,7 +99,7 @@ class AIOSINTCorrelator:
 
     Slot in run_scan() after subdomains + dns + real_ip blocks:
         correlator = AIOSINTCorrelator(
-            groq_api_key=GROQ_API_KEY,
+            openrouter_api_key=OPENROUTER_API_KEY,
             shodan_key=os.getenv('SHODAN_API_KEY'),
             vt_key=os.getenv('VIRUSTOTAL_API_KEY'),
             hunter_key=os.getenv('HUNTER_API_KEY'),
@@ -114,7 +114,7 @@ class AIOSINTCorrelator:
 
     def __init__(
         self,
-        groq_api_key: Optional[str] = None,
+        openrouter_api_key: Optional[str] = None,
         shodan_key: Optional[str] = None,
         vt_key: Optional[str] = None,
         hunter_key: Optional[str] = None,
@@ -123,7 +123,7 @@ class AIOSINTCorrelator:
         timeout: int = 12,
         max_workers: int = 10,
     ):
-        self.groq_api_key   = groq_api_key
+        self.openrouter_api_key   = openrouter_api_key
         self.shodan_key     = shodan_key
         self.vt_key         = vt_key
         self.hunter_key     = hunter_key
@@ -179,7 +179,7 @@ class AIOSINTCorrelator:
             reputation        — VirusTotal domain report
             certificates      — cert transparency enrichment
             source_coverage   — which sources returned data
-            ai_analysis       — Groq correlation narrative (or None)
+            ai_analysis       — OpenRouter correlation narrative (or None)
             scan_metadata
         """
         self.logger.info(f"OSINT correlation starting — domain: {domain}")
@@ -234,7 +234,7 @@ class AIOSINTCorrelator:
 
         # AI enrichment
         ai_result = None
-        if self.groq_api_key:
+        if self.openrouter_api_key:
             ai_result = self._ai_analysis(domain, output)
 
         duration = round(time.time() - start, 2)
@@ -251,7 +251,7 @@ class AIOSINTCorrelator:
             "timestamp":               datetime.now().isoformat(),
             "deep_scan":               deep,
             "sources_queried":         len(tasks),
-            "ai_model":                "Groq Llama3-70B" if ai_result else "Rule-based only",
+            "ai_model":                "OpenRouter Llama3-70B" if ai_result else "Rule-based only",
         }
 
         return output
@@ -1409,13 +1409,13 @@ class AIOSINTCorrelator:
         }
 
     # ------------------------------------------------------------------
-    # Pass 2 — Groq AI analysis
+    # Pass 2 — OpenRouter AI analysis
     # ------------------------------------------------------------------
 
     def _ai_analysis(self, domain: str, correlated: Dict) -> Optional[Dict]:
         try:
             prompt = self._build_prompt(domain, correlated)
-            text   = self._call_groq(prompt)
+            text   = self._call_openrouter(prompt)
             if not text:
                 return None
             return self._parse_ai_response(text)
@@ -1479,13 +1479,13 @@ Return a JSON object with EXACTLY these keys:
 
 Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
 
-    def _call_groq(self, prompt: str) -> Optional[str]:
+    def _call_openrouter(self, prompt: str) -> Optional[str]:
         headers = {
-            "Authorization": f"Bearer {self.groq_api_key}",
+            "Authorization": f"Bearer {self.openrouter_api_key}",
             "Content-Type":  "application/json",
         }
         payload = {
-            "model":       "llama3-70b-8192",
+            "model":       "meta-llama/llama-3-70b-instruct",
             "messages":    [{"role": "user", "content": prompt}],
             "temperature": 0.3,
             "max_tokens":  1800,
@@ -1493,9 +1493,9 @@ Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
 
         for attempt in range(3):
             try:
-                self.logger.info(f"Groq API call attempt {attempt + 1}")
+                self.logger.info(f"OpenRouter API call attempt {attempt + 1}")
                 resp = requests.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
+                    "https://openrouter.ai/api/v1/chat/completions",
                     headers=headers,
                     json=payload,
                     timeout=50,
@@ -1507,13 +1507,13 @@ Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
                     self.logger.warning(f"Rate limited — waiting {wait}s")
                     time.sleep(wait)
                     continue
-                self.logger.error(f"Groq {resp.status_code}: {resp.text[:200]}")
+                self.logger.error(f"OpenRouter {resp.status_code}: {resp.text[:200]}")
                 break
             except requests.exceptions.Timeout:
                 if attempt < 2:
                     time.sleep(2 ** attempt)
             except Exception as e:
-                self.logger.error(f"Groq error: {e}")
+                self.logger.error(f"OpenRouter error: {e}")
                 break
 
         return None
@@ -1528,7 +1528,7 @@ Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
 
         try:
             parsed = json.loads(cleaned)
-            parsed["ai_model"]     = "Groq Llama3-70B"
+            parsed["ai_model"]     = "OpenRouter Llama3-70B"
             parsed["generated_at"] = datetime.now().isoformat()
             return parsed
         except json.JSONDecodeError:
@@ -1537,7 +1537,7 @@ Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
             if start != -1 and end > start:
                 try:
                     parsed = json.loads(cleaned[start:end])
-                    parsed["ai_model"]     = "Groq Llama3-70B"
+                    parsed["ai_model"]     = "OpenRouter Llama3-70B"
                     parsed["generated_at"] = datetime.now().isoformat()
                     return parsed
                 except json.JSONDecodeError:

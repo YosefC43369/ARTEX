@@ -673,12 +673,12 @@ class AIPayloadGenerator:
     Pass 1 — rule-based: reads tech_detection + port_scan + ssl_scan from
              existing scan_results, maps detected stack to relevant vuln
              classes, selects + annotates payloads for each class.
-    Pass 2 — Groq AI: receives the tech profile and payload set, returns
+    Pass 2 — OpenRouter AI: receives the tech profile and payload set, returns
              a prioritised exploit chain, WAF bypass notes, and
              copy-paste ready exploit templates.
 
     Slot in run_scan() after tech_detection block:
-        generator = AIPayloadGenerator(groq_api_key=GROQ_API_KEY)
+        generator = AIPayloadGenerator(openrouter_api_key=OPENROUTER_API_KEY)
         scan_results[scan_id]['payload_analysis'] = generator.generate(
             domain=domain,
             scan_results=scan_results[scan_id],
@@ -687,10 +687,10 @@ class AIPayloadGenerator:
 
     def __init__(
         self,
-        groq_api_key: Optional[str] = None,
+        openrouter_api_key: Optional[str] = None,
         timeout: int = 10,
     ):
-        self.groq_api_key = groq_api_key
+        self.openrouter_api_key = openrouter_api_key
         self.timeout      = timeout
         self.logger       = logging.getLogger(__name__)
 
@@ -726,7 +726,7 @@ class AIPayloadGenerator:
             payloads              — per-vuln-class payload sets
             waf_detected          — bool + WAF name if found
             injection_points      — likely injection surfaces from context
-            ai_analysis           — Groq exploit chain + priority (or None)
+            ai_analysis           — OpenRouter exploit chain + priority (or None)
             scan_metadata
         """
         self.logger.info(f"Payload generation starting — domain: {domain}")
@@ -755,7 +755,7 @@ class AIPayloadGenerator:
 
         # Step 6 — AI enrichment
         ai_result = None
-        if self.groq_api_key:
+        if self.openrouter_api_key:
             ai_result = self._ai_analysis(
                 domain, tech_profile, vuln_classes,
                 waf_info, injection_points, payloads
@@ -775,7 +775,7 @@ class AIPayloadGenerator:
                 "domain":                domain,
                 "scan_duration_seconds": duration,
                 "timestamp":             datetime.now().isoformat(),
-                "ai_model":              "Groq Llama3-70B" if ai_result else "Rule-based only",
+                "ai_model":              "OpenRouter Llama3-70B" if ai_result else "Rule-based only",
                 "total_payloads":        sum(
                     len(v) for v in payloads.values() if isinstance(v, list)
                 ),
@@ -1232,7 +1232,7 @@ class AIPayloadGenerator:
         return False
 
     # ------------------------------------------------------------------
-    # Pass 2 — Groq AI enrichment
+    # Pass 2 — OpenRouter AI enrichment
     # ------------------------------------------------------------------
 
     def _ai_analysis(
@@ -1248,7 +1248,7 @@ class AIPayloadGenerator:
             prompt = self._build_prompt(
                 domain, tech_profile, vuln_classes, waf_info, injection_points
             )
-            text = self._call_groq(prompt)
+            text = self._call_openrouter(prompt)
             if not text:
                 return None
             return self._parse_ai_response(text)
@@ -1313,13 +1313,13 @@ Return a JSON object with EXACTLY these keys:
 
 Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
 
-    def _call_groq(self, prompt: str) -> Optional[str]:
+    def _call_openrouter(self, prompt: str) -> Optional[str]:
         headers = {
-            "Authorization": f"Bearer {self.groq_api_key}",
+            "Authorization": f"Bearer {self.openrouter_api_key}",
             "Content-Type":  "application/json",
         }
         payload = {
-            "model":       "llama3-70b-8192",
+            "model":       "meta-llama/llama-3-70b-instruct",
             "messages":    [{"role": "user", "content": prompt}],
             "temperature": 0.25,
             "max_tokens":  2000,
@@ -1327,9 +1327,9 @@ Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
 
         for attempt in range(3):
             try:
-                self.logger.info(f"Groq API call attempt {attempt + 1}")
+                self.logger.info(f"OpenRouter API call attempt {attempt + 1}")
                 resp = requests.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
+                    "https://openrouter.ai/api/v1/chat/completions",
                     headers=headers,
                     json=payload,
                     timeout=50,
@@ -1341,13 +1341,13 @@ Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
                     self.logger.warning(f"Rate limited — waiting {wait}s")
                     time.sleep(wait)
                     continue
-                self.logger.error(f"Groq {resp.status_code}: {resp.text[:200]}")
+                self.logger.error(f"OpenRouter {resp.status_code}: {resp.text[:200]}")
                 break
             except requests.exceptions.Timeout:
                 if attempt < 2:
                     time.sleep(2 ** attempt)
             except Exception as e:
-                self.logger.error(f"Groq error: {e}")
+                self.logger.error(f"OpenRouter error: {e}")
                 break
 
         return None
@@ -1362,7 +1362,7 @@ Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
 
         try:
             parsed = json.loads(cleaned)
-            parsed["ai_model"]     = "Groq Llama3-70B"
+            parsed["ai_model"]     = "OpenRouter Llama3-70B"
             parsed["generated_at"] = datetime.now().isoformat()
             return parsed
         except json.JSONDecodeError:
@@ -1371,7 +1371,7 @@ Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
             if start != -1 and end > start:
                 try:
                     parsed = json.loads(cleaned[start:end])
-                    parsed["ai_model"]     = "Groq Llama3-70B"
+                    parsed["ai_model"]     = "OpenRouter Llama3-70B"
                     parsed["generated_at"] = datetime.now().isoformat()
                     return parsed
                 except json.JSONDecodeError:

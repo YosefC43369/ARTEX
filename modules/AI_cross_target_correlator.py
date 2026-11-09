@@ -16,7 +16,7 @@ from itertools import combinations
 # Constants
 # ---------------------------------------------------------------------------
 
-GROQ_API_KEY = __import__("os").getenv("GROQ_API_KEY", "")
+OPENROUTER_API_KEY = __import__("os").getenv("OPENROUTER_API_KEY", "")
 
 # Minimum number of targets that must share something for it to be "common"
 COMMONALITY_THRESHOLD = 2
@@ -96,7 +96,7 @@ class CorrelationGraph:
         - Add / merge nodes (merge increments a 'count' field)
         - Add edges with probability and evidence
         - Enumerate paths between node types
-        - Export to dict for JSON / Groq prompt
+        - Export to dict for JSON / OpenRouter prompt
     """
 
     def __init__(self):
@@ -561,7 +561,7 @@ class AICrossTargetCorrelator:
 
     Takes a list of TargetProfile objects (or builds them from raw data),
     runs seven correlation passes, builds a CorrelationGraph, identifies
-    pivot paths, then sends a condensed profile to Groq for analyst narrative.
+    pivot paths, then sends a condensed profile to OpenRouter for analyst narrative.
 
     Correlation passes:
         1. Infrastructure correlation  — shared IPs, hosting org, CDN
@@ -573,17 +573,17 @@ class AICrossTargetCorrelator:
         7. Systemic risk identification — patterns that affect ≥50% of targets
 
     Slot in AI_batch_orchestrator after all per-target assessments complete:
-        correlator = AICrossTargetCorrelator(groq_api_key=GROQ_API_KEY)
+        correlator = AICrossTargetCorrelator(openrouter_api_key=OPENROUTER_API_KEY)
         batch_op.correlation_report = correlator.correlate(batch_op)
     """
 
     def __init__(
         self,
-        groq_api_key:            str = GROQ_API_KEY,
+        openrouter_api_key:            str = OPENROUTER_API_KEY,
         commonality_threshold:   int = COMMONALITY_THRESHOLD,
         min_pivot_probability:   float = 0.55,
     ):
-        self.groq_api_key           = groq_api_key
+        self.openrouter_api_key           = openrouter_api_key
         self.commonality_threshold  = commonality_threshold
         self.min_pivot_probability  = min_pivot_probability
         self.logger                 = logging.getLogger(__name__)
@@ -715,7 +715,7 @@ class AICrossTargetCorrelator:
 
         # ── AI enrichment ─────────────────────────────────────────────
         ai_result = None
-        if self.groq_api_key and (all_findings or pivot_paths):
+        if self.openrouter_api_key and (all_findings or pivot_paths):
             ai_result = self._ai_analysis(
                 batch_id, profiles, all_findings,
                 pivot_paths, systemic_risks, risk_matrix
@@ -741,7 +741,7 @@ class AICrossTargetCorrelator:
                 "batch_id":               batch_id,
                 "scan_duration_seconds":  duration,
                 "timestamp":              datetime.now().isoformat(),
-                "ai_model":               "Groq Llama3-70B" if ai_result else "Rule-based only",
+                "ai_model":               "OpenRouter Llama3-70B" if ai_result else "Rule-based only",
                 "graph_stats":            graph.stats(),
             },
         }
@@ -1757,7 +1757,7 @@ class AICrossTargetCorrelator:
         }
 
     # ------------------------------------------------------------------
-    # Pass 2 — Groq AI analysis
+    # Pass 2 — OpenRouter AI analysis
     # ------------------------------------------------------------------
 
     def _ai_analysis(
@@ -1774,7 +1774,7 @@ class AICrossTargetCorrelator:
                 batch_id, profiles, all_findings,
                 pivot_paths, systemic_risks, risk_matrix
             )
-            text = self._call_groq(prompt)
+            text = self._call_openrouter(prompt)
             if not text:
                 return None
             return self._parse_ai_response(text)
@@ -1847,22 +1847,22 @@ Return a JSON object with EXACTLY these keys:
 
 Return ONLY valid JSON. No markdown fences, no preamble."""
 
-    def _call_groq(self, prompt: str) -> Optional[str]:
+    def _call_openrouter(self, prompt: str) -> Optional[str]:
         headers = {
-            "Authorization": f"Bearer {self.groq_api_key}",
+            "Authorization": f"Bearer {self.openrouter_api_key}",
             "Content-Type":  "application/json",
         }
         payload = {
-            "model":       "llama3-70b-8192",
+            "model":       "meta-llama/llama-3-70b-instruct",
             "messages":    [{"role": "user", "content": prompt}],
             "temperature": 0.2,
             "max_tokens":  2000,
         }
         for attempt in range(3):
             try:
-                self.logger.info(f"Groq API call attempt {attempt + 1}")
+                self.logger.info(f"OpenRouter API call attempt {attempt + 1}")
                 resp = requests.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
+                    "https://openrouter.ai/api/v1/chat/completions",
                     headers = headers,
                     json    = payload,
                     timeout = 50,
@@ -1877,7 +1877,7 @@ Return ONLY valid JSON. No markdown fences, no preamble."""
                 if attempt < 2:
                     time.sleep(2 ** attempt)
             except Exception as e:
-                self.logger.error(f"Groq error: {e}")
+                self.logger.error(f"OpenRouter error: {e}")
                 break
         return None
 
@@ -1890,7 +1890,7 @@ Return ONLY valid JSON. No markdown fences, no preamble."""
         cleaned = cleaned.strip()
         try:
             parsed = json.loads(cleaned)
-            parsed["ai_model"]     = "Groq Llama3-70B"
+            parsed["ai_model"]     = "OpenRouter Llama3-70B"
             parsed["generated_at"] = datetime.now().isoformat()
             return parsed
         except json.JSONDecodeError:
@@ -1899,7 +1899,7 @@ Return ONLY valid JSON. No markdown fences, no preamble."""
             if start != -1 and end > start:
                 try:
                     parsed = json.loads(cleaned[start:end])
-                    parsed["ai_model"]     = "Groq Llama3-70B"
+                    parsed["ai_model"]     = "OpenRouter Llama3-70B"
                     parsed["generated_at"] = datetime.now().isoformat()
                     return parsed
                 except json.JSONDecodeError:

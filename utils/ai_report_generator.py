@@ -35,7 +35,7 @@
 #       IPs, domains, file hashes, URL patterns, user-agent strings.
 #       Generate Sigma rules for each IOC category.
 #
-#   Layer 6 — AI NARRATIVE GENERATION (Groq)
+#   Layer 6 — AI NARRATIVE GENERATION (OpenRouter)
 #       AI receives ONLY validated Layer 1-5 output. It is explicitly told
 #       which findings are confirmed, which are probable, and which were
 #       discarded. It must not introduce new findings not present in input.
@@ -56,7 +56,7 @@
 #   takeover_analysis, osint_correlation, payload_analysis,
 #   api_fuzz_results, waf_fingerprint, waf_detection (alias),
 #   remediation_plan, narrative_report
-# depends: requests (Groq), standard lib
+# depends: requests (OpenRouter), standard lib
 
 from __future__ import annotations
 
@@ -74,7 +74,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import requests as req_lib
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 # ---------------------------------------------------------------------------
 # CVSS v3.1 — deterministic scoring engine
@@ -264,14 +264,14 @@ class AIReportGenerator:
     The exported report is guaranteed to contain only evidence-backed findings.
 
     Entry point:
-        gen = AIReportGenerator(groq_api_key=GROQ_API_KEY)
+        gen = AIReportGenerator(openrouter_api_key=OPENROUTER_API_KEY)
         report = gen.generate(domain=domain, scan_results=scan_results)
 
     Returns a dict renderable as HTML or PDF via the existing ReportGenerator.
     """
 
-    def __init__(self, groq_api_key: str = GROQ_API_KEY, timeout: int = 50):
-        self.groq_api_key = groq_api_key
+    def __init__(self, openrouter_api_key: str = OPENROUTER_API_KEY, timeout: int = 50):
+        self.openrouter_api_key = openrouter_api_key
         self.timeout      = timeout
         self.logger       = logging.getLogger(__name__)
 
@@ -405,7 +405,7 @@ class AIReportGenerator:
         ai_sections = self._sanitise_ai_output(ai_sections, verified_ids)
         _vlog(6, "AI_NARRATIVE",
               1 if ai_sections.get("executive_summary") else 0, 0,
-              f"groq_model={ai_sections.get('_model','none')}")
+              f"openrouter_model={ai_sections.get('_model','none')}")
 
         # ==============================================================
         # LAYER 7 — FINAL CONSISTENCY CHECK
@@ -1302,23 +1302,23 @@ class AIReportGenerator:
         report_id:    str,
     ) -> Dict:
         """
-        Send validated Layer 1-5 output to Groq.
+        Send validated Layer 1-5 output to OpenRouter.
         AI is explicitly instructed which finding IDs are verified —
         it must not introduce new IDs or contradict verified evidence.
         """
-        if not self.groq_api_key:
+        if not self.openrouter_api_key:
             return self._rule_based_narrative(domain, findings, kill_chain, sr)
 
         try:
             prompt = self._build_narrative_prompt(
                 domain, findings, kill_chain, iocs, sr, report_id
             )
-            text = self._call_groq(prompt)
+            text = self._call_openrouter(prompt)
             if not text:
                 return self._rule_based_narrative(domain, findings, kill_chain, sr)
             parsed = self._parse_ai_response(text)
             if parsed:
-                parsed["_model"] = "Groq Llama3-70B"
+                parsed["_model"] = "OpenRouter Llama3-70B"
                 return parsed
         except Exception as e:
             self.logger.error(f"Layer 6 AI failed: {e}")
@@ -1388,7 +1388,7 @@ Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
         kill_chain: Dict,
         sr:        Dict,
     ) -> Dict:
-        """Deterministic narrative when Groq is unavailable."""
+        """Deterministic narrative when OpenRouter is unavailable."""
         overall = sr.get("vuln_prioritization", {}).get("overall_risk", {})
         risk    = overall.get("level", "unknown")
         score   = overall.get("score", 0)
@@ -1684,25 +1684,25 @@ Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
         return ai
 
     # ==================================================================
-    # Groq API
+    # OpenRouter API
     # ==================================================================
 
-    def _call_groq(self, prompt: str) -> Optional[str]:
+    def _call_openrouter(self, prompt: str) -> Optional[str]:
         headers = {
-            "Authorization": f"Bearer {self.groq_api_key}",
+            "Authorization": f"Bearer {self.openrouter_api_key}",
             "Content-Type":  "application/json",
         }
         payload = {
-            "model":       "llama3-70b-8192",
+            "model":       "meta-llama/llama-3-70b-instruct",
             "messages":    [{"role": "user", "content": prompt}],
             "temperature": 0.15,
             "max_tokens":  2000,
         }
         for attempt in range(3):
             try:
-                self.logger.info(f"Groq API call attempt {attempt + 1}")
+                self.logger.info(f"OpenRouter API call attempt {attempt + 1}")
                 resp = req_lib.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
+                    "https://openrouter.ai/api/v1/chat/completions",
                     headers=headers, json=payload, timeout=self.timeout,
                 )
                 if resp.status_code == 200:
@@ -1715,7 +1715,7 @@ Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
                 if attempt < 2:
                     time.sleep(2 ** attempt)
             except Exception as e:
-                self.logger.error(f"Groq error: {e}")
+                self.logger.error(f"OpenRouter error: {e}")
                 break
         return None
 
@@ -1736,5 +1736,5 @@ Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
                     return json.loads(cleaned[start:end])
                 except json.JSONDecodeError:
                     pass
-        self.logger.error("Could not parse Groq JSON response")
+        self.logger.error("Could not parse OpenRouter JSON response")
         return None

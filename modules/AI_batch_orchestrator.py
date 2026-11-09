@@ -32,7 +32,7 @@ from core.batch_manager     import TargetContext, BatchOperation, TARGET_STATUS
 from core.evidence_manager  import evidence_manager
 import os
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 
 # ---------------------------------------------------------------------------
@@ -71,17 +71,17 @@ def _log_exec(batch: BatchOperation, target: TargetContext, tool: str,
 
 
 # ---------------------------------------------------------------------------
-# AI Decision Engine — Groq-powered autonomous decisions
+# AI Decision Engine — OpenRouter-powered autonomous decisions
 # ---------------------------------------------------------------------------
 
 class AIDecisionEngine:
     """
-    Uses Groq to make autonomous Red Team workflow decisions.
-    Falls back to rule-based heuristics when Groq is unavailable.
+    Uses OpenRouter to make autonomous Red Team workflow decisions.
+    Falls back to rule-based heuristics when OpenRouter is unavailable.
     """
 
-    def __init__(self, groq_api_key: str = ""):
-        self.groq_api_key = groq_api_key
+    def __init__(self, openrouter_api_key: str = ""):
+        self.openrouter_api_key = openrouter_api_key
         self.logger       = logging.getLogger(__name__ + ".DecisionEngine")
 
     def decide_workflow(
@@ -105,15 +105,15 @@ class AIDecisionEngine:
                 rationale:        str,
             }
         """
-        if self.groq_api_key:
-            result = self._groq_decide(target_url, recon_summary)
+        if self.openrouter_api_key:
+            result = self._openrouter_decide(target_url, recon_summary)
             if result:
                 return result
 
         # Rule-based fallback
         return self._rule_based_decide(recon_summary)
 
-    def _groq_decide(self, target_url: str, recon_summary: Dict) -> Optional[Dict]:
+    def _openrouter_decide(self, target_url: str, recon_summary: Dict) -> Optional[Dict]:
         prompt = f"""You are an autonomous Red Team AI operator.
 Based on this initial recon summary for {target_url}, decide the assessment workflow.
 
@@ -135,13 +135,13 @@ Return ONLY valid JSON, no preamble."""
 
         try:
             resp = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
+                "https://openrouter.ai/api/v1/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {self.groq_api_key}",
+                    "Authorization": f"Bearer {self.openrouter_api_key}",
                     "Content-Type":  "application/json",
                 },
                 json={
-                    "model":       "llama3-70b-8192",
+                    "model":       "meta-llama/llama-3-70b-instruct",
                     "messages":    [{"role": "user", "content": prompt}],
                     "temperature": 0.1,
                     "max_tokens":  300,
@@ -156,7 +156,7 @@ Return ONLY valid JSON, no preamble."""
                         text = text[4:]
                 return json.loads(text.strip())
         except Exception as e:
-            self.logger.warning(f"Groq decision failed: {e}")
+            self.logger.warning(f"OpenRouter decision failed: {e}")
         return None
 
     @staticmethod
@@ -187,7 +187,7 @@ Return ONLY valid JSON, no preamble."""
 
     def summarise_findings(self, target_url: str, all_results: Dict) -> Dict:
         """Generate AI summary for a completed target assessment."""
-        ai_analyst = AIAnalyst(self.groq_api_key)
+        ai_analyst = AIAnalyst(self.openrouter_api_key)
         try:
             return ai_analyst.analyze_results(all_results)
         except Exception as e:
@@ -204,7 +204,7 @@ class AIBatchOrchestrator:
 
     Workflow per target:
         1. OBSERVE   — HTTP probe, DNS, basic subdomain enum
-        2. ANALYSE   — Groq decides workflow from recon summary
+        2. ANALYSE   — OpenRouter decides workflow from recon summary
         3. PLAN      — Build ordered task list
         4. ASSIGN    — Delegate to existing ARTEX modules
         5. EXECUTE   — Run each module, capture output + evidence
@@ -215,9 +215,9 @@ class AIBatchOrchestrator:
     Call orchestrate(target, batch) from BatchManager.run_batch().
     """
 
-    def __init__(self, groq_api_key: str = GROQ_API_KEY):
-        self.groq_api_key    = groq_api_key
-        self.decision_engine = AIDecisionEngine(groq_api_key)
+    def __init__(self, openrouter_api_key: str = OPENROUTER_API_KEY):
+        self.openrouter_api_key    = openrouter_api_key
+        self.decision_engine = AIDecisionEngine(openrouter_api_key)
         self.logger          = logging.getLogger(__name__)
 
         if not self.logger.handlers:
@@ -600,7 +600,7 @@ class AIBatchOrchestrator:
         target.scan_results.setdefault("timestamp", datetime.now().isoformat())
 
         try:
-            ai_analyst = AIAnalyst(self.groq_api_key)
+            ai_analyst = AIAnalyst(self.openrouter_api_key)
             ai_analysis = ai_analyst.analyze_results(target.scan_results)
             target.scan_results["ai_analysis"] = ai_analysis
             _log_exec(
@@ -645,7 +645,7 @@ class AIBatchOrchestrator:
         """
         try:
             from modules.sqlmap_integration import SQLMapIntegration
-            sqli = SQLMapIntegration(groq_api_key=self.groq_api_key)
+            sqli = SQLMapIntegration(openrouter_api_key=self.openrouter_api_key)
             result = sqli.run_assessment(
                 url        = target.url,
                 target_ctx = target,
@@ -671,5 +671,5 @@ class AIBatchOrchestrator:
         completed = [t for t in batch_op.targets
                      if t.status == "completed" and t.scan_results]
         if len(completed) >= 2:
-            correlator = AICrossTargetCorrelator(groq_api_key=GROQ_API_KEY)
+            correlator = AICrossTargetCorrelator(openrouter_api_key=OPENROUTER_API_KEY)
             batch_op.correlation_report = correlator.correlate_batch(batch_op)

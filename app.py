@@ -86,10 +86,10 @@ def datetimeformat(value, format='%Y-%m-%d %H:%M:%S'):
         value = datetime.fromisoformat(value)
     return value.strftime(format)
 
-# Add Groq API key configuration (or load from environment)
-GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+# Add OpenRouter API key configuration (or load from environment)
+OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 
-_orchestrator = AIBatchOrchestrator(groq_api_key=GROQ_API_KEY)
+_orchestrator = AIBatchOrchestrator(openrouter_api_key=OPENROUTER_API_KEY)
 
 scan_results = {}
 scan_status = {}
@@ -263,7 +263,7 @@ def run_scan(scan_id, domain, options):
                 subdomain_enum = SubdomainEnumerator()
                 subdomains = subdomain_enum.enumerate(domain)
                 scan_results[scan_id]['subdomains'] = subdomains
-                takeover_analyzer = AISubdomainTakeoverAnalyzer(groq_api_key=GROQ_API_KEY)
+                takeover_analyzer = AISubdomainTakeoverAnalyzer(openrouter_api_key=OPENROUTER_API_KEY)
                 scan_results[scan_id]['takeover_analysis'] = takeover_analyzer.analyze(
                     domain, subdomains=subdomains, max_targets=50
                 )
@@ -377,7 +377,7 @@ def run_scan(scan_id, domain, options):
                     'techniques_used': list(real_ip_discovery.ip_utils.cdn_ranges.keys())
                 }
                 correlator = AIOSINTCorrelator(
-                    groq_api_key=GROQ_API_KEY,
+                    openrouter_api_key=OPENROUTER_API_KEY,
                     shodan_key=os.getenv('SHODAN_API_KEY'),
                     vt_key=os.getenv('VIRUSTOTAL_API_KEY'),
                     hunter_key=os.getenv('HUNTER_API_KEY'),
@@ -549,14 +549,14 @@ def run_scan(scan_id, domain, options):
                 scan_results[scan_id]['tech_detection'] = tech_results
                 scan_status[scan_id]['progress'] = 80
                 
-                generator = AIPayloadGenerator(groq_api_key=GROQ_API_KEY)
+                generator = AIPayloadGenerator(openrouter_api_key=OPENROUTER_API_KEY)
                 scan_results[scan_id]['payload_analysis'] = generator.generate(
                     domain=domain,
                     scan_results=scan_results[scan_id],
                 )
                 scan_status[scan_id]['progress'] = 88
                 
-                waf_fp = AIWAFFingerprinter(groq_api_key=GROQ_API_KEY)
+                waf_fp = AIWAFFingerprinter(openrouter_api_key=OPENROUTER_API_KEY)
                 scan_results[scan_id]['waf_fingerprint'] = waf_fp.fingerprint(
                     domain=domain,
                     scan_results=scan_results[scan_id],
@@ -564,7 +564,7 @@ def run_scan(scan_id, domain, options):
                 scan_status[scan_id]['progress'] = 72
                 
                 cve_mapper = AICVEMapper(
-                    groq_api_key = GROQ_API_KEY,
+                    openrouter_api_key = OPENROUTER_API_KEY,
                     nvd_api_key  = os.getenv('NVD_API_KEY', ''),
                 )
                 scan_results[scan_id]['cve_map'] = cve_mapper.map(
@@ -573,7 +573,7 @@ def run_scan(scan_id, domain, options):
                 )
                 scan_status[scan_id]['progress'] = 75
                 
-                fuzzer = AIAPIFuzzer(groq_api_key=GROQ_API_KEY)
+                fuzzer = AIAPIFuzzer(openrouter_api_key=OPENROUTER_API_KEY)
                 scan_results[scan_id]['api_fuzz_results'] = fuzzer.fuzz(
                     domain=domain,
                     scan_results=scan_results[scan_id],
@@ -624,7 +624,7 @@ def run_scan(scan_id, domain, options):
                 
             if options.get('headers', True):
                 scan_status[scan_id]['current_task'] = 'Analyzing security headers...'
-                header_analyzer = AIHeaderAnalyzer(groq_api_key=GROQ_API_KEY)
+                header_analyzer = AIHeaderAnalyzer(openrouter_api_key=OPENROUTER_API_KEY)
                 scan_results[scan_id]['header_analysis'] = header_analyzer.analyze(
                     domain, subdomains=subdomains, max_targets=10
                 )
@@ -945,7 +945,7 @@ def run_scan(scan_id, domain, options):
                 try:
                     agent = AIDBExfilAgent(
                         target_url=f"https://{domain}",
-                        groq_api_key=os.getenv('GROQ_API_KEY'),
+                        openrouter_api_key=os.getenv('OPENROUTER_API_KEY'),
                     )
                     scan_results[scan_id]['ai_db_exfil'] = agent.scan()
                 except Exception as e:
@@ -975,28 +975,28 @@ def run_scan(scan_id, domain, options):
                 security_analysis['email_analysis'] = email_results
                 scan_results[scan_id]['security_analysis'] = security_analysis
                 
-            prioritizer = AIVulnPrioritizer(groq_api_key=GROQ_API_KEY)
+            prioritizer = AIVulnPrioritizer(openrouter_api_key=OPENROUTER_API_KEY)
             scan_results[scan_id]['vuln_prioritization'] = prioritizer.prioritize(
                 domain=domain,
                 scan_results=scan_results[scan_id],
             )
             scan_status[scan_id]['progress'] = 92
             
-            planner = AIAttackPathPlanner(groq_api_key=GROQ_API_KEY)
+            planner = AIAttackPathPlanner(openrouter_api_key=OPENROUTER_API_KEY)
             scan_results[scan_id]['attack_path_graph'] = planner.plan(
                 domain=domain,
                 scan_results=scan_results[scan_id],
             )
             scan_status[scan_id]['progress'] = 95
             
-            engine = AIRemediationEngine(groq_api_key=GROQ_API_KEY)
+            engine = AIRemediationEngine(openrouter_api_key=OPENROUTER_API_KEY)
             scan_results[scan_id]['remediation_plan'] = engine.build(
                 domain=domain,
                 scan_results=scan_results[scan_id],
             )
             scan_status[scan_id]['progress'] = 97
             
-            narrator = AIReportNarrator(groq_api_key=GROQ_API_KEY)
+            narrator = AIReportNarrator(openrouter_api_key=OPENROUTER_API_KEY)
             scan_results[scan_id]['narrative_report'] = narrator.narrate(
                 domain=domain,
                 scan_results=scan_results[scan_id],
@@ -1006,7 +1006,7 @@ def run_scan(scan_id, domain, options):
             
             # Run AI analysis
             scan_status[scan_id]['current_task'] = 'Generating AI insights...'
-            ai_analyst = AIAnalyst(GROQ_API_KEY)
+            ai_analyst = AIAnalyst(OPENROUTER_API_KEY)
             ai_analysis = ai_analyst.analyze_results(scan_results[scan_id])
             scan_results[scan_id]['ai_analysis'] = ai_analysis
             
@@ -1021,7 +1021,7 @@ def run_scan(scan_id, domain, options):
             minutes, seconds = divmod(remainder, 60)
             scan_status[scan_id]['duration'] = f"{hours}h {minutes}m {seconds}s"
             
-            ai_report_gen = AIReportGenerator(groq_api_key=GROQ_API_KEY)
+            ai_report_gen = AIReportGenerator(openrouter_api_key=OPENROUTER_API_KEY)
             scan_results[scan_id]['red_team_report'] = ai_report_gen.generate(
                 domain=domain,
                 scan_results=scan_results[scan_id],
@@ -1308,7 +1308,7 @@ def export_narrative(scan_id):
         return jsonify({'error': 'Not found'}), 404
     fmt = request.args.get('format', 'pdf')
     domain = scan_results[scan_id].get('domain', 'unknown')
-    narrator = AIReportNarrator(groq_api_key=GROQ_API_KEY)
+    narrator = AIReportNarrator(openrouter_api_key=OPENROUTER_API_KEY)
     if fmt == 'pdf':
         pdf = narrator.generate_pdf(domain, scan_results[scan_id], scan_id)
         return pdf, 200, {
@@ -1377,7 +1377,7 @@ def batch_correlate(batch_id):
     batch = batch_manager.get_batch(batch_id)
     if not batch:
         return jsonify({'error': 'Batch not found'}), 404
-    correlator = AICrossTargetCorrelator(groq_api_key=GROQ_API_KEY)
+    correlator = AICrossTargetCorrelator(openrouter_api_key=OPENROUTER_API_KEY)
     result = correlator.correlate_batch(batch)
     return jsonify(result)
     

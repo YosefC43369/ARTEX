@@ -14,14 +14,14 @@
 #          EPSS API      -> https://api.first.org/data/v1/epss
 #     4. EPSS score enrichment per CVE (exploitation probability 0.0–1.0)
 #     5. CPE-aware deduplication and version range matching
-#     6. Groq AI ranking by exploitability + business impact
+#     6. OpenRouter AI ranking by exploitability + business impact
 #
 # reads from confirmed scan_results keys:
 #   tech_detection -> {url: {technologies:[{name, version, category, sources}]}}
 #   port_scan      -> [{target, ports:[{port,service,state,risk}],
 #                       risky_ports:[{port,service,version,risk}]}]
 #   subdomains     -> [{subdomain, ip, http_status, https_status}]
-# depends: requests, packaging (version comparison), groq (via HTTP)
+# depends: requests, packaging (version comparison), openrouter (via HTTP)
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ from urllib.parse import quote, urlparse
 
 import requests as req_lib
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 NVD_API_KEY  = os.getenv("NVD_API_KEY", "")    # optional — boosts rate limit 5→50 req/30s
 
 # ---------------------------------------------------------------------------
@@ -935,10 +935,10 @@ class AICVEMapper:
         7. Version range filter — keep only CVEs where detected version
            falls within the vulnerable range
         8. Deduplicate across NVD + OSV results
-        9. Groq AI ranking by exploitability × business impact × EPSS
+        9. OpenRouter AI ranking by exploitability × business impact × EPSS
 
     Slot in run_scan() after tech_detection + port_scan:
-        mapper = AICVEMapper(groq_api_key=GROQ_API_KEY)
+        mapper = AICVEMapper(openrouter_api_key=OPENROUTER_API_KEY)
         scan_results[scan_id]['cve_map'] = mapper.map(
             domain=domain,
             scan_results=scan_results[scan_id],
@@ -947,13 +947,13 @@ class AICVEMapper:
 
     def __init__(
         self,
-        groq_api_key:  str = GROQ_API_KEY,
+        openrouter_api_key:  str = OPENROUTER_API_KEY,
         nvd_api_key:   str = NVD_API_KEY,
         timeout:       int = 15,
         max_components: int = 20,
         max_workers:   int = 4,
     ):
-        self.groq_api_key    = groq_api_key
+        self.openrouter_api_key    = openrouter_api_key
         self.max_components  = max_components
         self.max_workers     = max_workers
 
@@ -993,7 +993,7 @@ class AICVEMapper:
                 kev_findings:    [cve_findings entries where kev_listed=True]
                 high_epss:       [cve_findings entries where epss_score>=0.3]
                 severity_counts: {critical, high, medium, low}
-                ai_analysis:     Groq ranking + narrative
+                ai_analysis:     OpenRouter ranking + narrative
                 scan_metadata
             }
         """
@@ -1068,7 +1068,7 @@ class AICVEMapper:
 
         # ── Step 9: AI ranking ────────────────────────────────────────
         ai_result = None
-        if self.groq_api_key and all_cves:
+        if self.openrouter_api_key and all_cves:
             ai_result = self._ai_analysis(domain, all_cves[:25], kev_findings, high_epss)
 
         duration = round(time.time() - start, 2)
@@ -1088,7 +1088,7 @@ class AICVEMapper:
                 "domain":                domain,
                 "scan_duration_seconds": duration,
                 "timestamp":             datetime.now().isoformat(),
-                "ai_model":              "Groq Llama3-70B" if ai_result else "Rule-based only",
+                "ai_model":              "OpenRouter Llama3-70B" if ai_result else "Rule-based only",
                 "components_scanned":    len(versioned),
                 "total_cves":            len(all_cves),
                 "kev_count":             len(kev_findings),
@@ -1457,7 +1457,7 @@ class AICVEMapper:
         return cves
 
     # ------------------------------------------------------------------
-    # Pass 2 — Groq AI analysis
+    # Pass 2 — OpenRouter AI analysis
     # ------------------------------------------------------------------
 
     def _ai_analysis(
@@ -1469,7 +1469,7 @@ class AICVEMapper:
     ) -> Optional[Dict]:
         try:
             prompt = self._build_prompt(domain, all_cves, kev_findings, high_epss)
-            text   = self._call_groq(prompt)
+            text   = self._call_openrouter(prompt)
             if not text:
                 return None
             return self._parse_ai_response(text)
@@ -1529,22 +1529,22 @@ Return a JSON object with EXACTLY these keys:
 
 Return ONLY valid JSON. No markdown fences, no preamble."""
 
-    def _call_groq(self, prompt: str) -> Optional[str]:
+    def _call_openrouter(self, prompt: str) -> Optional[str]:
         headers = {
-            "Authorization": f"Bearer {self.groq_api_key}",
+            "Authorization": f"Bearer {self.openrouter_api_key}",
             "Content-Type":  "application/json",
         }
         payload = {
-            "model":       "llama3-70b-8192",
+            "model":       "meta-llama/llama-3-70b-instruct",
             "messages":    [{"role": "user", "content": prompt}],
             "temperature": 0.2,
             "max_tokens":  2000,
         }
         for attempt in range(3):
             try:
-                self.logger.info(f"Groq API call attempt {attempt + 1}")
+                self.logger.info(f"OpenRouter API call attempt {attempt + 1}")
                 resp = req_lib.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
+                    "https://openrouter.ai/api/v1/chat/completions",
                     headers=headers, json=payload, timeout=50,
                 )
                 if resp.status_code == 200:
@@ -1557,7 +1557,7 @@ Return ONLY valid JSON. No markdown fences, no preamble."""
                 if attempt < 2:
                     time.sleep(2 ** attempt)
             except Exception as e:
-                self.logger.error(f"Groq error: {e}")
+                self.logger.error(f"OpenRouter error: {e}")
                 break
         return None
 
@@ -1570,7 +1570,7 @@ Return ONLY valid JSON. No markdown fences, no preamble."""
         cleaned = cleaned.strip()
         try:
             parsed = json.loads(cleaned)
-            parsed["ai_model"]     = "Groq Llama3-70B"
+            parsed["ai_model"]     = "OpenRouter Llama3-70B"
             parsed["generated_at"] = datetime.now().isoformat()
             return parsed
         except json.JSONDecodeError:
@@ -1579,10 +1579,10 @@ Return ONLY valid JSON. No markdown fences, no preamble."""
             if start != -1 and end > start:
                 try:
                     parsed = json.loads(cleaned[start:end])
-                    parsed["ai_model"]     = "Groq Llama3-70B"
+                    parsed["ai_model"]     = "OpenRouter Llama3-70B"
                     parsed["generated_at"] = datetime.now().isoformat()
                     return parsed
                 except json.JSONDecodeError:
                     pass
-            self.logger.error("Could not parse Groq JSON response")
+            self.logger.error("Could not parse OpenRouter JSON response")
             return None

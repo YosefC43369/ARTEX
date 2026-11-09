@@ -24,7 +24,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
 from utils.helpers import format_timestamp
 from utils.reporting import ReportGenerator   # reuse styles
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +163,7 @@ class EvidenceChain:
 
 
 # ---------------------------------------------------------------------------
-# Narrative sections — structured output from Groq
+# Narrative sections — structured output from OpenRouter
 # ---------------------------------------------------------------------------
 
 PERSPECTIVE_OWNER  = "owner"
@@ -190,7 +190,7 @@ class AIReportNarrator:
                                  durations, and SHA-256 hash chain (evidence)
 
     Slot in run_scan() / AI_batch_orchestrator after all other modules:
-        narrator = AIReportNarrator(groq_api_key=GROQ_API_KEY)
+        narrator = AIReportNarrator(openrouter_api_key=OPENROUTER_API_KEY)
         scan_results['narrative_report'] = narrator.narrate(
             domain=domain,
             scan_results=scan_results,
@@ -217,8 +217,8 @@ class AIReportNarrator:
         "info":     colors.HexColor("#666666"),
     }
 
-    def __init__(self, groq_api_key: str = GROQ_API_KEY, timeout: int = 45):
-        self.groq_api_key = groq_api_key
+    def __init__(self, openrouter_api_key: str = OPENROUTER_API_KEY, timeout: int = 45):
+        self.openrouter_api_key = openrouter_api_key
         self.timeout      = timeout
         self.logger       = logging.getLogger(__name__)
 
@@ -254,7 +254,7 @@ class AIReportNarrator:
                 ai_operation_log:   { batch_id, target, total_steps,
                                       integrity_ok, records:[...] }
                 report_metadata:    { generated_at, domain, modules_read,
-                                      groq_model_used, generation_duration_s }
+                                      openrouter_model_used, generation_duration_s }
             }
         """
         self.logger.info(f"Narrating report for domain: {domain}")
@@ -283,7 +283,7 @@ class AIReportNarrator:
                 "domain":                domain,
                 "batch_id":              batch_id,
                 "modules_read":          data_profile["modules_present"],
-                "groq_model_used":       "llama3-70b-8192" if self.groq_api_key else "rule-based",
+                "openrouter_model_used":       "meta-llama/llama-3-70b-instruct" if self.openrouter_api_key else "rule-based",
                 "generation_duration_s": duration,
                 "evidence_integrity":    chain.verify_integrity(),
                 "total_evidence_records": len(chain.all_records()),
@@ -451,7 +451,7 @@ class AIReportNarrator:
             "  REPORT METADATA",
             "━" * 70,
             f"  Modules read:    {', '.join(meta.get('modules_read', []))}",
-            f"  AI model:        {meta.get('groq_model_used','?')}",
+            f"  AI model:        {meta.get('openrouter_model_used','?')}",
             f"  Build time:      {meta.get('generation_duration_s','?')}s",
             f"  Evidence records: {meta.get('total_evidence_records','?')}",
             f"  Chain integrity: {'OK' if meta.get('evidence_integrity') else 'BROKEN'}",
@@ -471,7 +471,7 @@ class AIReportNarrator:
     ) -> Dict:
         """
         Read every available scan_results key, log each read as evidence,
-        return a condensed data_profile dict for Groq prompts.
+        return a condensed data_profile dict for OpenRouter prompts.
         """
         t0 = time.time()
         profile: Dict = {
@@ -660,21 +660,21 @@ class AIReportNarrator:
         t0 = time.time()
         chain.add(
             agent            = "AIReportNarrator.owner_perspective",
-            action           = "GROQ_NARRATIVE_REQUEST",
-            tool_or_function = "POST https://api.groq.com/openai/v1/chat/completions",
+            action           = "OPENROUTER_NARRATIVE_REQUEST",
+            tool_or_function = "POST https://openrouter.ai/api/v1/chat/completions",
             arguments        = {
-                "model":       "llama3-70b-8192",
+                "model":       "meta-llama/llama-3-70b-instruct",
                 "perspective": "owner",
                 "domain":      domain,
                 "input_keys":  profile["modules_present"],
             },
             raw_output   = "",
-            result_summary = "Sending owner-perspective prompt to Groq",
+            result_summary = "Sending owner-perspective prompt to OpenRouter",
             duration_s   = 0.0,
         )
 
-        if self.groq_api_key:
-            result = self._groq_owner(domain, profile)
+        if self.openrouter_api_key:
+            result = self._openrouter_owner(domain, profile)
         else:
             result = self._rule_based_owner(domain, profile)
 
@@ -682,7 +682,7 @@ class AIReportNarrator:
         chain.add(
             agent            = "AIReportNarrator.owner_perspective",
             action           = "OWNER_NARRATIVE_COMPLETE",
-            tool_or_function = "POST https://api.groq.com/openai/v1/chat/completions",
+            tool_or_function = "POST https://openrouter.ai/api/v1/chat/completions",
             arguments        = {"domain": domain, "perspective": "owner"},
             raw_output       = json.dumps(result, default=str)[:1000],
             result_summary   = (
@@ -696,7 +696,7 @@ class AIReportNarrator:
         )
         return result
 
-    def _groq_owner(self, domain: str, p: Dict) -> Dict:
+    def _openrouter_owner(self, domain: str, p: Dict) -> Dict:
         prompt = f"""You are a lead security consultant preparing an executive report for the CISO and board.
 Domain assessed: {domain}
 
@@ -726,7 +726,7 @@ Return ONLY valid JSON with these exact keys:
 
 Return ONLY valid JSON. No markdown, no preamble."""
 
-        return self._call_groq(prompt) or self._rule_based_owner(domain, p)
+        return self._call_openrouter(prompt) or self._rule_based_owner(domain, p)
 
     def _rule_based_owner(self, domain: str, p: Dict) -> Dict:
         sev = p.get("vuln_severity_counts", {})
@@ -797,20 +797,20 @@ Return ONLY valid JSON. No markdown, no preamble."""
         t0 = time.time()
         chain.add(
             agent            = "AIReportNarrator.hunter_perspective",
-            action           = "GROQ_NARRATIVE_REQUEST",
-            tool_or_function = "POST https://api.groq.com/openai/v1/chat/completions",
+            action           = "OPENROUTER_NARRATIVE_REQUEST",
+            tool_or_function = "POST https://openrouter.ai/api/v1/chat/completions",
             arguments        = {
-                "model":       "llama3-70b-8192",
+                "model":       "meta-llama/llama-3-70b-instruct",
                 "perspective": "hunter",
                 "domain":      domain,
             },
             raw_output   = "",
-            result_summary = "Sending hunter-perspective prompt to Groq",
+            result_summary = "Sending hunter-perspective prompt to OpenRouter",
             duration_s   = 0.0,
         )
 
-        if self.groq_api_key:
-            result = self._groq_hunter(domain, profile)
+        if self.openrouter_api_key:
+            result = self._openrouter_hunter(domain, profile)
         else:
             result = self._rule_based_hunter(domain, profile)
 
@@ -818,7 +818,7 @@ Return ONLY valid JSON. No markdown, no preamble."""
         chain.add(
             agent            = "AIReportNarrator.hunter_perspective",
             action           = "HUNTER_NARRATIVE_COMPLETE",
-            tool_or_function = "POST https://api.groq.com/openai/v1/chat/completions",
+            tool_or_function = "POST https://openrouter.ai/api/v1/chat/completions",
             arguments        = {"domain": domain, "perspective": "hunter"},
             raw_output       = json.dumps(result, default=str)[:1000],
             result_summary   = (
@@ -831,7 +831,7 @@ Return ONLY valid JSON. No markdown, no preamble."""
         )
         return result
 
-    def _groq_hunter(self, domain: str, p: Dict) -> Dict:
+    def _openrouter_hunter(self, domain: str, p: Dict) -> Dict:
         # Condense critical paths for prompt
         paths_condensed = []
         for path in p.get("critical_paths", [])[:5]:
@@ -868,7 +868,7 @@ Return ONLY valid JSON with these exact keys:
 
 Return ONLY valid JSON. No markdown, no preamble."""
 
-        return self._call_groq(prompt) or self._rule_based_hunter(domain, p)
+        return self._call_openrouter(prompt) or self._rule_based_hunter(domain, p)
 
     def _rule_based_hunter(self, domain: str, p: Dict) -> Dict:
         paths = []
@@ -934,16 +934,16 @@ Return ONLY valid JSON. No markdown, no preamble."""
         }
 
     # ------------------------------------------------------------------
-    # Groq API caller
+    # OpenRouter API caller
     # ------------------------------------------------------------------
 
-    def _call_groq(self, prompt: str) -> Optional[Dict]:
+    def _call_openrouter(self, prompt: str) -> Optional[Dict]:
         headers = {
-            "Authorization": f"Bearer {self.groq_api_key}",
+            "Authorization": f"Bearer {self.openrouter_api_key}",
             "Content-Type":  "application/json",
         }
         payload = {
-            "model":       "llama3-70b-8192",
+            "model":       "meta-llama/llama-3-70b-instruct",
             "messages":    [{"role": "user", "content": prompt}],
             "temperature": 0.2,
             "max_tokens":  2000,
@@ -951,7 +951,7 @@ Return ONLY valid JSON. No markdown, no preamble."""
         for attempt in range(3):
             try:
                 resp = requests.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
+                    "https://openrouter.ai/api/v1/chat/completions",
                     headers = headers,
                     json    = payload,
                     timeout = self.timeout,
@@ -1318,7 +1318,7 @@ Return ONLY valid JSON. No markdown, no preamble."""
             [Paragraph("Generated At",          s["td"]), Paragraph(str(meta.get("generated_at","?")), s["td"])],
             [Paragraph("Domain",                s["td"]), Paragraph(meta.get("domain","?"),            s["td"])],
             [Paragraph("Batch ID",              s["td"]), Paragraph(meta.get("batch_id","?"),           s["td"])],
-            [Paragraph("AI Model",              s["td"]), Paragraph(meta.get("groq_model_used","?"),    s["td"])],
+            [Paragraph("AI Model",              s["td"]), Paragraph(meta.get("openrouter_model_used","?"),    s["td"])],
             [Paragraph("Generation Time",       s["td"]), Paragraph(f"{meta.get('generation_duration_s','?')}s", s["td"])],
             [Paragraph("Evidence Records",      s["td"]), Paragraph(str(meta.get("total_evidence_records","?")), s["td"])],
             [Paragraph("Chain Integrity",       s["td"]), Paragraph(

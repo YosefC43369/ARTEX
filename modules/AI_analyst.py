@@ -7,20 +7,20 @@ from datetime import datetime
 import time
 
 class AIAnalyst:
-    def __init__(self, groq_api_key: str = None):
+    def __init__(self, openrouter_api_key: str = None):
         """
-        Initialize the AI analyst with Groq API integration
+        Initialize the AI analyst with OpenRouter API integration
         
         Args:
-            groq_api_key: Optional Groq API key (if not provided, will use rule-based analysis only)
+            openrouter_api_key: Optional OpenRouter API key (if not provided, will use rule-based analysis only)
         """
-        self.groq_api_key = "" #Add your groq_api_key here
+        self.openrouter_api_key = "" #Add your openrouter_api_key here
         self.logger = logging.getLogger(__name__)
         
         # Set up logging
         logging.basicConfig(level=logging.INFO)
         
-        # Templates for when Groq is not available
+        # Templates for when OpenRouter is not available
         self.owner_template = {
             'summary': "Security assessment completed with rule-based analysis",
             'key_findings': [
@@ -91,7 +91,7 @@ class AIAnalyst:
 
     def analyze_results(self, scan_results: Dict) -> Dict:
         """
-        Analyze scan results and generate dual-perspective insights using AI (Groq) or rule-based fallback
+        Analyze scan results and generate dual-perspective insights using AI (OpenRouter) or rule-based fallback
         
         Args:
             scan_results: Dictionary containing all scan results
@@ -102,19 +102,19 @@ class AIAnalyst:
         try:
             self.logger.info("Starting AI analysis...")
             
-            if self.groq_api_key:
-                self.logger.info("Using Groq API for analysis")
+            if self.openrouter_api_key:
+                self.logger.info("Using OpenRouter API for analysis")
                 
                 # Analyze owner perspective
                 self.logger.info("Analyzing owner perspective...")
-                owner_analysis = self._analyze_with_groq(scan_results, perspective="owner")
+                owner_analysis = self._analyze_with_openrouter(scan_results, perspective="owner")
                 
                 # Add delay between API calls
                 time.sleep(2)
                 
                 # Analyze hunter perspective
                 self.logger.info("Analyzing hunter perspective...")
-                hunter_analysis = self._analyze_with_groq(scan_results, perspective="hunter")
+                hunter_analysis = self._analyze_with_openrouter(scan_results, perspective="hunter")
                 
             else:
                 self.logger.info("Using rule-based analysis")
@@ -142,22 +142,22 @@ class AIAnalyst:
                 'generated_at': datetime.now().isoformat()
             }
 
-    def _analyze_with_groq(self, scan_results: Dict, perspective: str) -> Dict:
+    def _analyze_with_openrouter(self, scan_results: Dict, perspective: str) -> Dict:
         """
-        Use Groq API to analyze the results from a specific perspective
+        Use OpenRouter API to analyze the results from a specific perspective
         """
         try:
             # Prepare the appropriate prompt
             prompt = self._prepare_prompt(scan_results, perspective)
             
-            # Call Groq API with retry logic
+            # Call OpenRouter API with retry logic
             headers = {
-                "Authorization": f"Bearer {self.groq_api_key}",
+                "Authorization": f"Bearer {self.openrouter_api_key}",
                 "Content-Type": "application/json"
             }
             
             payload = {
-                "model": "llama3-70b-8192",
+                "model": "meta-llama/llama-3-70b-instruct",
                 "messages": [{
                     "role": "user",
                     "content": prompt
@@ -170,10 +170,10 @@ class AIAnalyst:
             max_retries = 3
             for attempt in range(max_retries):
                 try:
-                    self.logger.info(f"Making Groq API call for {perspective} perspective (attempt {attempt + 1})")
+                    self.logger.info(f"Making OpenRouter API call for {perspective} perspective (attempt {attempt + 1})")
                     
                     response = requests.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
+                        "https://openrouter.ai/api/v1/chat/completions",
                         headers=headers,
                         json=payload,
                         timeout=45
@@ -192,7 +192,7 @@ class AIAnalyst:
                             if content.strip().startswith('{'):
                                 analysis = json.loads(content)
                                 analysis['perspective'] = perspective
-                                analysis['ai_model'] = 'Groq Llama3-70B'
+                                analysis['ai_model'] = 'OpenRouter Llama3-70B'
                                 return analysis
                             else:
                                 # Handle non-JSON response
@@ -239,7 +239,7 @@ class AIAnalyst:
 
     def _prepare_prompt(self, scan_results: Dict, perspective: str) -> str:
         """
-        Prepare the prompt for Groq API based on scan results and perspective
+        Prepare the prompt for OpenRouter API based on scan results and perspective
         """
         # Create a condensed version of results for the prompt
         condensed = {
@@ -331,7 +331,7 @@ Return only valid JSON, no additional text."""
                 json_str = text[start:end]
                 parsed = json.loads(json_str)
                 parsed['perspective'] = perspective
-                parsed['ai_model'] = 'Groq Llama3-70B'
+                parsed['ai_model'] = 'OpenRouter Llama3-70B'
                 return parsed
         except:
             pass

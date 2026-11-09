@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 from collections import defaultdict
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 # ---------------------------------------------------------------------------
 # Remediation knowledge base — per vuln class, per severity, per tech stack
@@ -1588,18 +1588,18 @@ class AIRemediationEngine:
         - Config fixes per server/platform
         - Effort / priority / phase assignment
         - Deduplication across findings that map to the same fix
-        - AI narrative (Groq) for executive summary + risk delta
+        - AI narrative (OpenRouter) for executive summary + risk delta
 
     Slot in run_scan() after vuln_prioritization:
-        engine = AIRemediationEngine(groq_api_key=GROQ_API_KEY)
+        engine = AIRemediationEngine(openrouter_api_key=OPENROUTER_API_KEY)
         scan_results[scan_id]['remediation_plan'] = engine.build(
             domain=domain,
             scan_results=scan_results[scan_id],
         )
     """
 
-    def __init__(self, groq_api_key: str = GROQ_API_KEY, timeout: int = 45):
-        self.groq_api_key = groq_api_key
+    def __init__(self, openrouter_api_key: str = OPENROUTER_API_KEY, timeout: int = 45):
+        self.openrouter_api_key = openrouter_api_key
         self.timeout      = timeout
         self.logger       = logging.getLogger(__name__)
 
@@ -1629,7 +1629,7 @@ class AIRemediationEngine:
                 risk_delta:        {before_score, after_score, reduction_pct}
                 tech_specific:     {language/framework → [relevant_items]}
                 coverage_map:      {vuln_class → remediation_key}
-                ai_analysis:       Groq executive narrative (or None)
+                ai_analysis:       OpenRouter executive narrative (or None)
                 scan_metadata
             }
         """
@@ -1719,7 +1719,7 @@ class AIRemediationEngine:
 
         # ── AI enrichment ─────────────────────────────────────────────
         ai_result = None
-        if self.groq_api_key and all_items:
+        if self.openrouter_api_key and all_items:
             ai_result = self._ai_analysis(
                 domain, all_items, roadmap, risk_delta,
                 overall, sev_counts, chains
@@ -1743,7 +1743,7 @@ class AIRemediationEngine:
                 "domain":                domain,
                 "scan_duration_seconds": duration,
                 "timestamp":             datetime.now().isoformat(),
-                "ai_model":              "Groq Llama3-70B" if ai_result else "Rule-based only",
+                "ai_model":              "OpenRouter Llama3-70B" if ai_result else "Rule-based only",
                 "total_items":           len(all_items),
                 "findings_covered":      len(coverage_map),
             },
@@ -2061,7 +2061,7 @@ class AIRemediationEngine:
         return dict(groups)
 
     # ------------------------------------------------------------------
-    # Pass 2 — Groq AI analysis
+    # Pass 2 — OpenRouter AI analysis
     # ------------------------------------------------------------------
 
     def _ai_analysis(
@@ -2079,7 +2079,7 @@ class AIRemediationEngine:
                 domain, items, roadmap, risk_delta,
                 overall, sev_counts, chains
             )
-            text = self._call_groq(prompt)
+            text = self._call_openrouter(prompt)
             if not text:
                 return None
             return self._parse_ai_response(text)
@@ -2141,22 +2141,22 @@ Return a JSON object with EXACTLY these keys:
 
 Return ONLY valid JSON. No markdown fences, no preamble."""
 
-    def _call_groq(self, prompt: str) -> Optional[str]:
+    def _call_openrouter(self, prompt: str) -> Optional[str]:
         headers = {
-            "Authorization": f"Bearer {self.groq_api_key}",
+            "Authorization": f"Bearer {self.openrouter_api_key}",
             "Content-Type":  "application/json",
         }
         payload = {
-            "model":       "llama3-70b-8192",
+            "model":       "meta-llama/llama-3-70b-instruct",
             "messages":    [{"role": "user", "content": prompt}],
             "temperature": 0.2,
             "max_tokens":  1800,
         }
         for attempt in range(3):
             try:
-                self.logger.info(f"Groq API call attempt {attempt + 1}")
+                self.logger.info(f"OpenRouter API call attempt {attempt + 1}")
                 resp = requests.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
+                    "https://openrouter.ai/api/v1/chat/completions",
                     headers = headers,
                     json    = payload,
                     timeout = self.timeout,
@@ -2171,7 +2171,7 @@ Return ONLY valid JSON. No markdown fences, no preamble."""
                 if attempt < 2:
                     time.sleep(2 ** attempt)
             except Exception as e:
-                self.logger.error(f"Groq error: {e}")
+                self.logger.error(f"OpenRouter error: {e}")
                 break
         return None
 
@@ -2184,7 +2184,7 @@ Return ONLY valid JSON. No markdown fences, no preamble."""
         cleaned = cleaned.strip()
         try:
             parsed = json.loads(cleaned)
-            parsed["ai_model"]     = "Groq Llama3-70B"
+            parsed["ai_model"]     = "OpenRouter Llama3-70B"
             parsed["generated_at"] = datetime.now().isoformat()
             return parsed
         except json.JSONDecodeError:
@@ -2193,7 +2193,7 @@ Return ONLY valid JSON. No markdown fences, no preamble."""
             if start != -1 and end > start:
                 try:
                     parsed = json.loads(cleaned[start:end])
-                    parsed["ai_model"]     = "Groq Llama3-70B"
+                    parsed["ai_model"]     = "OpenRouter Llama3-70B"
                     parsed["generated_at"] = datetime.now().isoformat()
                     return parsed
                 except json.JSONDecodeError:

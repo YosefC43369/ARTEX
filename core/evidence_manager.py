@@ -855,13 +855,13 @@ class EvidenceManager:
         inputs:     Dict,
         outputs:    Dict,
         duration_s: float = 0.0,
-        model:      str   = "llama3-70b-8192",
+        model:      str   = "meta-llama/llama-3-70b-instruct",
     ) -> str:
         """Record an AI autonomous decision."""
         return self.record(
             batch_id    = batch_id,
             target_id   = target_id,
-            source_tool = f"Groq/{model}",
+            source_tool = f"OpenRouter/{model}",
             source_agent = agent,
             record_type = self.TYPE_AI_DECISION,
             operation   = decision,

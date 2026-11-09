@@ -12,7 +12,7 @@
 #   subdomains         -> list of subdomain dicts with http_status/https_status/ip
 #   tech_detection     -> {url: {technologies: [{name, version, category}]}}
 #   dns_records        -> {A:[], MX:[], SPF:[], TXT:[], NS:[]}
-# depends: requests (Groq call only)
+# depends: requests (OpenRouter call only)
 
 import json
 import time
@@ -362,11 +362,11 @@ class AIVulnPrioritizer:
     Reads every ARTEX scan_results key that carries vulnerability or risk data,
     normalises findings into a common schema, scores each finding with a
     CVSS-inspired engine (technical × business impact), and sends a condensed
-    prioritised list to Groq for analyst-grade narrative + remediation roadmap.
+    prioritised list to OpenRouter for analyst-grade narrative + remediation roadmap.
 
     Slot in run_scan() after all scan modules, before ai_analyst:
 
-        prioritizer = AIVulnPrioritizer(groq_api_key=GROQ_API_KEY)
+        prioritizer = AIVulnPrioritizer(openrouter_api_key=OPENROUTER_API_KEY)
         scan_results[scan_id]['vuln_prioritization'] = prioritizer.prioritize(
             domain=domain,
             scan_results=scan_results[scan_id],
@@ -375,10 +375,10 @@ class AIVulnPrioritizer:
 
     def __init__(
         self,
-        groq_api_key: Optional[str] = None,
+        openrouter_api_key: Optional[str] = None,
         timeout: int = 12,
     ):
-        self.groq_api_key = groq_api_key
+        self.openrouter_api_key = openrouter_api_key
         self.timeout      = timeout
         self.logger       = logging.getLogger(__name__)
 
@@ -412,7 +412,7 @@ class AIVulnPrioritizer:
             attack_chains     — inferred multi-step chains from finding combinations
             overall_risk      — {score, level, rationale}
             coverage_map      — which sources contributed findings
-            ai_analysis       — Groq enrichment or None
+            ai_analysis       — OpenRouter enrichment or None
             scan_metadata
         """
         self.logger.info(f"Vuln prioritization starting — domain: {domain}")
@@ -456,7 +456,7 @@ class AIVulnPrioritizer:
 
         # ── AI enrichment ────────────────────────────────────────────────
         ai_result = None
-        if self.groq_api_key and all_findings:
+        if self.openrouter_api_key and all_findings:
             ai_result = self._ai_analysis(domain, all_findings[:20], overall_risk, attack_chains)
 
         duration = round(time.time() - start, 2)
@@ -479,7 +479,7 @@ class AIVulnPrioritizer:
                 "total_findings":          len(all_findings),
                 "scan_duration_seconds":   duration,
                 "timestamp":               datetime.now().isoformat(),
-                "ai_model":                "Groq Llama3-70B" if ai_result else "Rule-based only",
+                "ai_model":                "OpenRouter Llama3-70B" if ai_result else "Rule-based only",
             },
         }
 
@@ -1522,7 +1522,7 @@ class AIVulnPrioritizer:
         return dict(coverage)
 
     # ------------------------------------------------------------------
-    # Pass 2 — Groq AI enrichment
+    # Pass 2 — OpenRouter AI enrichment
     # ------------------------------------------------------------------
 
     def _ai_analysis(
@@ -1534,7 +1534,7 @@ class AIVulnPrioritizer:
     ) -> Optional[Dict]:
         try:
             prompt = self._build_prompt(domain, top_findings, overall_risk, attack_chains)
-            text   = self._call_groq(prompt)
+            text   = self._call_openrouter(prompt)
             if not text:
                 return None
             return self._parse_ai_response(text)
@@ -1608,13 +1608,13 @@ Return a JSON object with EXACTLY these keys:
 
 Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
 
-    def _call_groq(self, prompt: str) -> Optional[str]:
+    def _call_openrouter(self, prompt: str) -> Optional[str]:
         headers = {
-            "Authorization": f"Bearer {self.groq_api_key}",
+            "Authorization": f"Bearer {self.openrouter_api_key}",
             "Content-Type":  "application/json",
         }
         payload = {
-            "model":       "llama3-70b-8192",
+            "model":       "meta-llama/llama-3-70b-instruct",
             "messages":    [{"role": "user", "content": prompt}],
             "temperature": 0.2,
             "max_tokens":  2000,
@@ -1622,9 +1622,9 @@ Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
 
         for attempt in range(3):
             try:
-                self.logger.info(f"Groq API call attempt {attempt + 1}")
+                self.logger.info(f"OpenRouter API call attempt {attempt + 1}")
                 resp = requests.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
+                    "https://openrouter.ai/api/v1/chat/completions",
                     headers=headers,
                     json=payload,
                     timeout=50,
@@ -1636,13 +1636,13 @@ Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
                     self.logger.warning(f"Rate limited — waiting {wait}s")
                     time.sleep(wait)
                     continue
-                self.logger.error(f"Groq {resp.status_code}: {resp.text[:200]}")
+                self.logger.error(f"OpenRouter {resp.status_code}: {resp.text[:200]}")
                 break
             except requests.exceptions.Timeout:
                 if attempt < 2:
                     time.sleep(2 ** attempt)
             except Exception as e:
-                self.logger.error(f"Groq error: {e}")
+                self.logger.error(f"OpenRouter error: {e}")
                 break
 
         return None
@@ -1657,7 +1657,7 @@ Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
 
         try:
             parsed = json.loads(cleaned)
-            parsed["ai_model"]     = "Groq Llama3-70B"
+            parsed["ai_model"]     = "OpenRouter Llama3-70B"
             parsed["generated_at"] = datetime.now().isoformat()
             return parsed
         except json.JSONDecodeError:
@@ -1666,7 +1666,7 @@ Return ONLY valid JSON. No markdown fences, no preamble, no trailing text."""
             if start != -1 and end > start:
                 try:
                     parsed = json.loads(cleaned[start:end])
-                    parsed["ai_model"]     = "Groq Llama3-70B"
+                    parsed["ai_model"]     = "OpenRouter Llama3-70B"
                     parsed["generated_at"] = datetime.now().isoformat()
                     return parsed
                 except json.JSONDecodeError:
