@@ -1,0 +1,4 @@
+[
+  {"category": "tls_weakness", "title": "Expired TLS certificate", "severity": "high", "validation_status": "confirmed", "confidence": "high", "evidence_ids": ["ev_sample01"], "cvss_score": 7.9},
+  {"category": "subdomain_takeover", "title": "Possible subdomain takeover: old.example.com", "severity": "high", "validation_status": "potential", "confidence": "medium", "evidence_ids": ["ev_sample02"]}
+]

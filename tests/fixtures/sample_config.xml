@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<artex_pentest>
+  <engagement>
+    <autonomous_enabled>true</autonomous_enabled>
+    <max_iterations>5</max_iterations>
+    <max_runtime_seconds>60</max_runtime_seconds>
+    <max_tasks>20</max_tasks>
+    <evidence_enabled>true</evidence_enabled>
+    <report_formats>json,markdown,html</report_formats>
+  </engagement>
+  <targets>
+    <target id="fixture-target">
+      <domain>example.com</domain>
+      <url>https://example.com</url>
+      <allowed_domains>example.com</allowed_domains>
+      <allow_wildcard_subdomains>true</allow_wildcard_subdomains>
+      <allowed_protocols>https</allowed_protocols>
+      <allowed_ports>443</allowed_ports>
+      <excluded_paths>/admin</excluded_paths>
+      <permissions>
+        <recon>true</recon>
+        <tls_inspection>true</tls_inspection>
+        <header_analysis>true</header_analysis>
+        <subdomain_takeover>true</subdomain_takeover>
+        <port_scan>false</port_scan>
+      </permissions>
+    </target>
+  </targets>
+</artex_pentest>

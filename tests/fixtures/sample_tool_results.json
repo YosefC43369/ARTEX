@@ -1,0 +1,6 @@
+{
+  "recon.subdomains": {"subdomains": [{"subdomain": "www.example.com", "ip": "93.184.216.34", "http_status": 200, "https_status": 200}], "count": 1},
+  "tls.inspect": {"tls": {"expired": true, "issuer": "Example CA", "protocols": {"TLS1.0": true, "TLS1.2": true}}},
+  "http.headers": {"header_analysis": {"missing_headers": ["Content-Security-Policy", "Strict-Transport-Security", "X-Frame-Options"]}},
+  "scan.ports": {"port_scan": [{"target": "www.example.com", "ports": [{"port": 3306, "protocol": "tcp", "service": "mysql", "risk": {"level": "high", "vulnerabilities": "Exposed database"}}], "risky_ports": [3306]}]}
+}

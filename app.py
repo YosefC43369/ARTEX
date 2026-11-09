@@ -91,6 +91,21 @@ OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 
 _orchestrator = AIBatchOrchestrator(openrouter_api_key=OPENROUTER_API_KEY)
 
+# ── Autonomous penetration-testing subsystem (optional, scope-enforced) ──────
+# Initialized defensively: a missing/invalid config.xml must NOT prevent the
+# existing application from starting. The /pentest/* routes report 503 when the
+# subsystem is unavailable. Reuses the existing OPENROUTER_API_KEY.
+import atexit
+pentest_agent = None
+pentest_init_error = None
+try:
+    from penetration_testing import PenetrationTestingAgent
+    pentest_agent = PenetrationTestingAgent(openrouter_api_key=OPENROUTER_API_KEY)
+    atexit.register(pentest_agent.shutdown)
+except Exception as _pt_exc:  # ConfigurationError, import error, etc.
+    pentest_init_error = str(_pt_exc)
+    print(f"[pentest] subsystem not initialized: {_pt_exc}")
+
 scan_results = {}
 scan_status = {}
 
@@ -1465,6 +1480,94 @@ def get_capabilities():
             'FastSecurityAnalyst'
         ]
     })
+
+# ── Penetration-testing subsystem routes ─────────────────────────────────────
+def _pentest_guard():
+    if pentest_agent is None:
+        return jsonify({'error': 'Penetration-testing subsystem unavailable',
+                        'detail': pentest_init_error}), 503
+    return None
+
+
+@app.route('/pentest/health')
+def pentest_health():
+    if pentest_agent is None:
+        return jsonify({'status': 'unavailable', 'detail': pentest_init_error}), 503
+    return jsonify(pentest_agent.health())
+
+
+@app.route('/pentest/targets')
+def pentest_targets():
+    guard = _pentest_guard()
+    if guard:
+        return guard
+    return jsonify({'targets': pentest_agent.list_targets()})
+
+
+@app.route('/pentest/capabilities')
+def pentest_capabilities():
+    guard = _pentest_guard()
+    if guard:
+        return guard
+    return jsonify({'capabilities': pentest_agent.list_capabilities()})
+
+
+@app.route('/pentest/start', methods=['POST'])
+def pentest_start():
+    guard = _pentest_guard()
+    if guard:
+        return guard
+    data = request.get_json(silent=True) or {}
+    target_id = (data.get('target_id') or '').strip()
+    if not target_id:
+        return jsonify({'error': 'target_id is required'}), 400
+    result = pentest_agent.start_engagement(target_id, background=True)
+    return jsonify(result), (404 if 'error' in result else 202)
+
+
+@app.route('/pentest/status/<session_id>')
+def pentest_status(session_id):
+    guard = _pentest_guard()
+    if guard:
+        return guard
+    res = pentest_agent.get_status(session_id)
+    return jsonify(res), (404 if 'error' in res else 200)
+
+
+@app.route('/pentest/session/<session_id>')
+def pentest_session(session_id):
+    guard = _pentest_guard()
+    if guard:
+        return guard
+    res = pentest_agent.get_session(session_id, include_log=request.args.get('log') == '1')
+    return jsonify(res), (404 if 'error' in res else 200)
+
+
+@app.route('/pentest/report/<session_id>')
+def pentest_report(session_id):
+    guard = _pentest_guard()
+    if guard:
+        return guard
+    fmt = request.args.get('format', 'json')
+    reports = pentest_agent.get_report(session_id, [fmt])
+    if 'error' in reports:
+        return jsonify(reports), 404
+    key = 'markdown' if fmt == 'md' else fmt
+    content = reports.get(key)
+    if content is None:
+        return jsonify({'error': f'Unknown or unavailable format: {fmt}'}), 400
+    ctype = {'json': 'application/json', 'markdown': 'text/markdown',
+             'html': 'text/html'}.get(key, 'text/plain')
+    return content, 200, {'Content-Type': ctype}
+
+
+@app.route('/pentest/cancel/<session_id>', methods=['POST'])
+def pentest_cancel(session_id):
+    guard = _pentest_guard()
+    if guard:
+        return guard
+    return jsonify(pentest_agent.cancel(session_id))
+
 
 if __name__ == '__main__':
     print("🌐 Server: http://127.0.0.1:5000")
